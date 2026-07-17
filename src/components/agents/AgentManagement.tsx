@@ -1848,3 +1848,496 @@ function labelForAction(a: string) {
 function humanize(k: string) {
   return k.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase());
 }
+
+function labelForBulk(a: "enable" | "disable" | "update" | "remove") {
+  return a === "enable" ? "Enable" : a === "disable" ? "Disable" : a === "update" ? "Push update" : "Remove";
+}
+
+function GuardedBulkButton({
+  canManage, onClick, icon: Icon, label, tone,
+}: { canManage: boolean; onClick: () => void; icon: typeof Play; label: string; tone?: "danger" }) {
+  const btn = (
+    <Button
+      size="sm"
+      variant={tone === "danger" ? "destructive" : "outline"}
+      className="h-8 gap-1.5"
+      disabled={!canManage}
+      onClick={onClick}
+    >
+      <Icon className="h-3.5 w-3.5" /> {label}
+    </Button>
+  );
+  if (canManage) return btn;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild><span>{btn}</span></TooltipTrigger>
+      <TooltipContent>Requires manage_policies permission</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function BatchStatusPill({ status }: { status: DeploymentBatch["status"] }) {
+  const cls =
+    status === "Completed" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+    : status === "In progress" ? "border-primary/40 bg-primary/10 text-primary"
+    : status === "Failed" ? "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300"
+    : "border-border bg-muted text-muted-foreground";
+  return <Badge variant="outline" className={cn("font-normal", cls)}>{status}</Badge>;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Bulk action confirmation wizard
+// ────────────────────────────────────────────────────────────────────────────
+
+function BulkActionConfirm({
+  action, agents, onCancel, onConfirm,
+}: {
+  action: null | "enable" | "disable" | "update" | "remove";
+  agents: Agent[];
+  onCancel: () => void;
+  onConfirm: (a: "enable" | "disable" | "update" | "remove") => void;
+}) {
+  const [step, setStep] = useState<1 | 2>(1);
+  const [ack, setAck] = useState(false);
+
+  const open = !!action;
+  const a = action ?? "disable";
+  const isDestructive = a === "remove";
+  const label = labelForBulk(a);
+
+  const summary =
+    a === "enable"  ? "Selected agents will resume communication with the broker."
+    : a === "disable" ? "Selected agents will stop accepting sessions until re-enabled."
+    : a === "update"  ? `Selected agents will be scheduled for the current package (${CURRENT_VERSION}).`
+    :                   "Selected agents will be uninstalled and removed from inventory. This cannot be undone from this screen.";
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { onCancel(); setStep(1); setAck(false); } }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            {isDestructive && <AlertOctagon className="h-4 w-4 text-rose-500" />}
+            Bulk action — {label}
+          </DialogTitle>
+          <DialogDescription>
+            {agents.length} agent{agents.length === 1 ? "" : "s"} selected.
+          </DialogDescription>
+        </DialogHeader>
+
+        <Stepper step={step} labels={["Review targets", "Confirm"]} />
+
+        {step === 1 && (
+          <div className="space-y-2">
+            <div className="rounded-md border bg-muted/20 p-3 text-xs text-muted-foreground">{summary}</div>
+            <div className="max-h-56 overflow-auto rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/40">
+                    <TableHead>Device</TableHead>
+                    <TableHead>Branch</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {agents.map((ag) => (
+                    <TableRow key={ag.id}>
+                      <TableCell className="font-medium">{ag.hostname}<div className="text-xs text-muted-foreground">{ag.ip}</div></TableCell>
+                      <TableCell>{ag.branch}</TableCell>
+                      <TableCell><AgentStatusPill status={ag.status} /></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="space-y-3">
+            <div className={cn(
+              "rounded-md border p-3 text-xs",
+              isDestructive ? "border-rose-500/30 bg-rose-500/5 text-rose-700 dark:text-rose-300" : "bg-muted/20 text-muted-foreground",
+            )}>
+              You are about to <strong>{label.toLowerCase()}</strong> {agents.length} agent{agents.length === 1 ? "" : "s"}.
+              {isDestructive && " An audit entry will be created for every affected endpoint."}
+            </div>
+            <label className="flex items-start gap-2 text-sm">
+              <Checkbox checked={ack} onCheckedChange={(v) => setAck(!!v)} className="mt-0.5" />
+              <span>I understand this action will be applied to all selected agents on the private WAN.</span>
+            </label>
+          </div>
+        )}
+
+        <DialogFooter className="flex items-center justify-between gap-2 sm:justify-between">
+          <Button variant="ghost" onClick={() => (step === 1 ? (onCancel(), setStep(1), setAck(false)) : setStep(1))}>
+            <ChevronLeft className="mr-1 h-4 w-4" /> {step === 1 ? "Cancel" : "Back"}
+          </Button>
+          {step === 1 ? (
+            <Button onClick={() => setStep(2)}>Continue <ChevronRight className="ml-1 h-4 w-4" /></Button>
+          ) : (
+            <Button variant={isDestructive ? "destructive" : "default"} disabled={!ack} onClick={() => { onConfirm(a); setStep(1); setAck(false); }}>
+              Confirm {label}
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Per-batch deployment progress dialog
+// ────────────────────────────────────────────────────────────────────────────
+
+function BatchProgressDialog({
+  batch, onClose, role, viewerName,
+}: { batch: DeploymentBatch | null; onClose: () => void; role: ErapRole; viewerName: string }) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const canManage = hasPermission(role, "manage_policies");
+
+  const retry = (device: string, mode: "step" | "device" | "batch") => {
+    if (!canManage) {
+      toast.error("Your role can't retry installs");
+      logAudit({ actor: viewerName, actorRole: role, category: "device", action: "batch_retry", target: device, status: "denied", details: mode });
+      return;
+    }
+    logAudit({ actor: viewerName, actorRole: role, category: "device", action: "batch_retry", target: device, status: "success", details: mode });
+    toast.success(`Retry queued — ${device}`);
+  };
+
+  return (
+    <Dialog open={!!batch} onOpenChange={(v) => !v && (onClose(), setExpanded(null))}>
+      <DialogContent className="max-w-3xl">
+        {batch && (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                {batch.title}
+                <BatchStatusPill status={batch.status} />
+              </DialogTitle>
+              <DialogDescription>{batch.id} · {batch.when} · {batch.devices.length} devices</DialogDescription>
+            </DialogHeader>
+
+            <div className="grid grid-cols-4 gap-3">
+              {(() => {
+                const done = batch.devices.filter((d) => d.status === "completed").length;
+                const running = batch.devices.filter((d) => d.status === "in_progress" || d.status === "retrying").length;
+                const failed = batch.devices.filter((d) => d.status === "failed").length;
+                const queued = batch.devices.filter((d) => d.status === "queued").length;
+                return (
+                  <>
+                    <SummaryCard title="Completed" body={String(done)} />
+                    <SummaryCard title="In progress" body={String(running)} />
+                    <SummaryCard title="Failed" body={String(failed)} />
+                    <SummaryCard title="Queued" body={String(queued)} />
+                  </>
+                );
+              })()}
+            </div>
+
+            <ScrollArea className="max-h-[420px]">
+              <div className="space-y-2 pr-2">
+                {batch.devices.map((d) => {
+                  const isOpen = expanded === d.hostname;
+                  const progress = Math.round(
+                    (d.steps.filter((s) => s.status === "success").length / d.steps.length) * 100,
+                  );
+                  return (
+                    <div key={d.hostname} className="rounded-md border">
+                      <button
+                        type="button"
+                        onClick={() => setExpanded(isOpen ? null : d.hostname)}
+                        className="flex w-full items-center gap-3 px-3 py-2 text-left"
+                      >
+                        <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", isOpen && "rotate-90")} />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-medium">{d.hostname}</div>
+                          <div className="text-xs text-muted-foreground">{d.ip}</div>
+                        </div>
+                        <div className="hidden w-40 items-center gap-2 md:flex">
+                          <Progress value={progress} className="h-1.5 flex-1" />
+                          <span className="w-8 text-right font-mono text-xs text-muted-foreground">{progress}%</span>
+                        </div>
+                        <DeviceBatchPill status={d.status} />
+                        {(d.status === "failed" || d.status === "in_progress") && (
+                          <span onClick={(e) => e.stopPropagation()}>
+                            <Button size="sm" variant="outline" className="h-7 gap-1" onClick={() => retry(d.hostname, "device")} disabled={!canManage}>
+                              <RotateCcw className="h-3 w-3" /> Retry
+                            </Button>
+                          </span>
+                        )}
+                      </button>
+                      {isOpen && (
+                        <div className="border-t bg-muted/10 p-3">
+                          <ol className="space-y-2">
+                            {d.steps.map((s, i) => (
+                              <li key={s.key} className="flex items-start gap-3">
+                                <StepIcon status={s.status} />
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2 text-sm">
+                                    <span className="font-medium">{i + 1}. {s.label}</span>
+                                    <span className="text-xs text-muted-foreground">{stepStatusLabel(s.status)}</span>
+                                  </div>
+                                  {s.detail && <div className="mt-0.5 text-xs text-rose-600 dark:text-rose-400">{s.detail}</div>}
+                                </div>
+                                {s.status === "failed" && (
+                                  <Button size="sm" variant="outline" className="h-7 gap-1" onClick={() => retry(d.hostname, "step")} disabled={!canManage}>
+                                    <RotateCcw className="h-3 w-3" /> Retry step
+                                  </Button>
+                                )}
+                              </li>
+                            ))}
+                          </ol>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </ScrollArea>
+
+            <DialogFooter className="justify-between sm:justify-between">
+              <div className="text-xs text-muted-foreground">Offline WAN batch · installer logs are pulled on next check-in</div>
+              <div className="flex gap-2">
+                <Button variant="ghost" onClick={() => (onClose(), setExpanded(null))}>Close</Button>
+                <Button
+                  variant="outline"
+                  className="gap-1"
+                  disabled={!canManage || batch.devices.every((d) => d.status !== "failed")}
+                  onClick={() => retry(batch.id, "batch")}
+                >
+                  <RotateCcw className="h-3.5 w-3.5" /> Retry failed
+                </Button>
+              </div>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function StepIcon({ status }: { status: BatchStepStatus }) {
+  if (status === "success") return <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-500" />;
+  if (status === "failed")  return <XCircle       className="mt-0.5 h-4 w-4 text-rose-500" />;
+  if (status === "running") return <Loader2       className="mt-0.5 h-4 w-4 animate-spin text-primary" />;
+  if (status === "skipped") return <X             className="mt-0.5 h-4 w-4 text-muted-foreground" />;
+  return <Circle className="mt-0.5 h-4 w-4 text-muted-foreground" />;
+}
+
+function stepStatusLabel(s: BatchStepStatus) {
+  return s === "success" ? "Done" : s === "failed" ? "Failed" : s === "running" ? "Running…" : s === "skipped" ? "Skipped" : "Pending";
+}
+
+function DeviceBatchPill({ status }: { status: BatchDevice["status"] }) {
+  const map: Record<BatchDevice["status"], { label: string; cls: string }> = {
+    completed:   { label: "Completed",   cls: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" },
+    in_progress: { label: "In progress", cls: "border-primary/40 bg-primary/10 text-primary" },
+    retrying:    { label: "Retrying",    cls: "border-primary/40 bg-primary/10 text-primary" },
+    failed:      { label: "Failed",      cls: "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300" },
+    queued:      { label: "Queued",      cls: "border-border bg-muted text-muted-foreground" },
+  };
+  const s = map[status];
+  return <Badge variant="outline" className={cn("font-normal", s.cls)}>{s.label}</Badge>;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Right-side diagnostics panel
+// ────────────────────────────────────────────────────────────────────────────
+
+function makeSeries(seed: number, base: number, jitter: number, len = 24) {
+  const out: number[] = [];
+  let v = base;
+  let s = seed;
+  for (let i = 0; i < len; i++) {
+    s = (s * 9301 + 49297) % 233280;
+    v = Math.max(0, Math.min(100, v + ((s / 233280) - 0.5) * jitter));
+    out.push(Math.round(v));
+  }
+  return out;
+}
+
+function Sparkline({ data, tone = "primary" }: { data: number[]; tone?: "primary" | "warn" | "danger" }) {
+  const max = Math.max(1, ...data);
+  const min = Math.min(0, ...data);
+  const w = 100, h = 28;
+  const dx = w / (data.length - 1);
+  const norm = (v: number) => h - ((v - min) / (max - min || 1)) * h;
+  const d = data.map((v, i) => `${i === 0 ? "M" : "L"}${(i * dx).toFixed(1)},${norm(v).toFixed(1)}`).join(" ");
+  const stroke =
+    tone === "danger" ? "rgb(244 63 94)" :
+    tone === "warn"   ? "rgb(245 158 11)" :
+                         "hsl(var(--primary))";
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="h-8 w-full">
+      <path d={d} fill="none" stroke={stroke} strokeWidth={1.2} vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
+
+function DiagnosticsPanel({ agent, onClose }: { agent: Agent | null; onClose: () => void }) {
+  if (!agent) return null;
+
+  const seed = agent.id.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
+  const cpuSeries = makeSeries(seed,       agent.cpu || 5,   12);
+  const memSeries = makeSeries(seed + 11,  agent.mem || 20,  8);
+  const latSeries = makeSeries(seed + 23,  agent.latencyMs || 15, 10);
+
+  const offline = agent.status === "offline" || agent.status === "install_failed";
+  const outdated = agent.agentVersion !== "3.2.1";
+
+  const heartbeats = Array.from({ length: 12 }).map((_, i) => {
+    if (offline && i < 8) return { t: `${(i + 1) * 15}m ago`, ok: false };
+    return { t: `${i * 8}s ago`, ok: true };
+  });
+
+  const hints: { title: string; body: string; tone: "warn" | "danger" | "info" }[] = [];
+  if (offline) {
+    hints.push({ title: "No heartbeat for over 3 hours", body: "Broker last saw a hello packet at check-in. Verify WAN link, DNS to broker 10.0.0.4, and Windows service ERAPAgentSvc is running.", tone: "danger" });
+    if (agent.cert === "expired") hints.push({ title: "Agent certificate expired", body: "Kerberos handshake will fail. Re-issue via internal CA and push a reinstall.", tone: "danger" });
+    if (!agent.authOk) hints.push({ title: "Authentication failing", body: "Machine SPN mismatch is the most common cause on Server 2022. Reset computer account and rejoin.", tone: "warn" });
+  }
+  if (outdated) {
+    hints.push({ title: `Agent ${agent.agentVersion} is behind production (${CURRENT_VERSION})`, body: "Schedule a Push Update from the bulk actions or open the deployment wizard.", tone: "warn" });
+  }
+  if (agent.cert === "expiring") {
+    hints.push({ title: "Certificate expiring within 30 days", body: "Renewal window is open. Rotate via the offline PKI job.", tone: "warn" });
+  }
+  if (!agent.compliant) {
+    hints.push({ title: "Policy compliance drift detected", body: "Agent settings differ from assigned policy. Reassign to restore baseline.", tone: "warn" });
+  }
+  if (hints.length === 0) {
+    hints.push({ title: "No issues detected", body: "Telemetry within thresholds. Continue routine monitoring.", tone: "info" });
+  }
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40 bg-black/20" onClick={onClose} />
+      <aside className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l bg-card shadow-xl">
+        <div className="flex items-center gap-2 border-b px-4 py-3">
+          <Activity className="h-4 w-4 text-primary" />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold">{agent.hostname}</div>
+            <div className="text-xs text-muted-foreground">{agent.id} · {agent.ip}</div>
+          </div>
+          <AgentStatusPill status={agent.status} />
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose} aria-label="Close diagnostics">
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <ScrollArea className="flex-1">
+          <div className="space-y-4 p-4">
+            <section>
+              <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <TrendIcon /> Metrics — last 2 hours
+              </div>
+              <div className="space-y-2">
+                <MetricRow label="CPU"     value={`${agent.cpu}%`}       series={cpuSeries} tone={agent.cpu > 80 ? "danger" : agent.cpu > 60 ? "warn" : "primary"} />
+                <MetricRow label="Memory"  value={`${agent.mem}%`}       series={memSeries} tone={agent.mem > 80 ? "danger" : agent.mem > 60 ? "warn" : "primary"} />
+                <MetricRow label="Latency" value={`${agent.latencyMs} ms`} series={latSeries} tone={agent.latencyMs > 60 ? "warn" : "primary"} />
+              </div>
+            </section>
+
+            <Separator />
+
+            <section>
+              <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <HeartPulse className="h-3.5 w-3.5" /> Heartbeat history
+              </div>
+              <div className="grid grid-cols-6 gap-1">
+                {heartbeats.map((h, i) => (
+                  <Tooltip key={i}>
+                    <TooltipTrigger asChild>
+                      <div className={cn(
+                        "h-6 rounded-sm",
+                        h.ok ? "bg-emerald-500/70" : "bg-rose-500/60",
+                      )} />
+                    </TooltipTrigger>
+                    <TooltipContent>{h.ok ? "OK" : "Missed"} · {h.t}</TooltipContent>
+                  </Tooltip>
+                ))}
+              </div>
+              <div className="mt-2 flex justify-between text-[11px] text-muted-foreground">
+                <span>Older</span><span>Latest — {agent.heartbeat}</span>
+              </div>
+            </section>
+
+            <Separator />
+
+            <section>
+              <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <Lightbulb className="h-3.5 w-3.5" /> Root-cause hints
+              </div>
+              <div className="space-y-2">
+                {hints.map((h, i) => (
+                  <div key={i} className={cn(
+                    "rounded-md border p-3 text-xs",
+                    h.tone === "danger" ? "border-rose-500/30 bg-rose-500/5"
+                    : h.tone === "warn"  ? "border-amber-500/30 bg-amber-500/5"
+                    : "bg-muted/20",
+                  )}>
+                    <div className={cn(
+                      "text-sm font-medium",
+                      h.tone === "danger" ? "text-rose-700 dark:text-rose-300"
+                      : h.tone === "warn"  ? "text-amber-700 dark:text-amber-300"
+                      : "text-foreground",
+                    )}>{h.title}</div>
+                    <div className="mt-1 text-muted-foreground">{h.body}</div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <Separator />
+
+            <section>
+              <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <History className="h-3.5 w-3.5" /> Recent events
+              </div>
+              <ol className="space-y-2 text-xs">
+                {AGENT_LOGS.filter((l) => l.device === agent.hostname).slice(0, 4).map((l, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <ResultDot result={l.result} />
+                    <div className="min-w-0">
+                      <div><span className="font-medium">{l.action}</span> — {l.detail}</div>
+                      <div className="text-muted-foreground">{l.ts} · {l.user}</div>
+                    </div>
+                  </li>
+                ))}
+                {AGENT_LOGS.filter((l) => l.device === agent.hostname).length === 0 && (
+                  <li className="text-muted-foreground">No recent lifecycle events for this device.</li>
+                )}
+              </ol>
+            </section>
+          </div>
+        </ScrollArea>
+      </aside>
+    </>
+  );
+}
+
+function MetricRow({ label, value, series, tone }: { label: string; value: string; series: number[]; tone: "primary" | "warn" | "danger" }) {
+  return (
+    <div className="rounded-md border bg-muted/10 p-3">
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted-foreground">{label}</span>
+        <span className="text-sm font-semibold">{value}</span>
+      </div>
+      <Sparkline data={series} tone={tone} />
+    </div>
+  );
+}
+
+function TrendIcon() {
+  return <Activity className="h-3.5 w-3.5" />;
+}
+
+function ResultDot({ result }: { result: AgentLog["result"] }) {
+  const cls =
+    result === "success" ? "bg-emerald-500"
+    : result === "failed" ? "bg-rose-500"
+    : result === "denied" ? "bg-amber-500"
+    : "bg-muted-foreground";
+  return <span className={cn("mt-1 h-1.5 w-1.5 shrink-0 rounded-full", cls)} />;
+}
