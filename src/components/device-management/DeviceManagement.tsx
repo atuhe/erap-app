@@ -41,6 +41,8 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { ErapRole, ROLE_LABELS, hasPermission, Permission } from "@/lib/erap-roles";
 import { logAudit } from "@/lib/audit-log";
+import { useNavigate } from "@tanstack/react-router";
+import { SessionWorkflow, type ConnectTarget } from "@/components/sessions/SessionWorkflow";
 
 type Status = "online" | "offline";
 
@@ -90,6 +92,8 @@ export function DeviceManagement() {
   const [status, setStatus] = useState("all");
   const [os, setOs] = useState("all");
   const [selectedId, setSelectedId] = useState<string | null>(DEVICES[0].id);
+  const [connectDevice, setConnectDevice] = useState<ConnectTarget | null>(null);
+  const navigate = useNavigate();
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -143,12 +147,9 @@ export function DeviceManagement() {
       toast.error("Your role can't start remote sessions");
       return;
     }
-    if (d.status === "offline") {
-      logDevice("connect_attempt", d, "denied", "Device offline");
-      return;
-    }
-    logDevice("connect", d, "success");
-    toast.success(`Connecting to ${d.hostname}…`);
+    const full = DEVICES.find((x) => x.id === d.id);
+    if (!full) return;
+    setConnectDevice(full);
   };
   const doRestart = (d: { id: string; hostname: string }) => {
     if (!can.restart) {
@@ -191,6 +192,7 @@ export function DeviceManagement() {
     setActive(n.key);
     if (n.key === "sessions") logAudit({ actor: viewerName, actorRole: role, category: "session", action: "view_sessions", status: "info" });
     if (n.key === "reports") logAudit({ actor: viewerName, actorRole: role, category: "report", action: "view_report", status: "info" });
+    if (n.key === "sessions" || n.key === "history") navigate({ to: "/sessions" });
   };
 
   return (
@@ -466,6 +468,8 @@ export function DeviceManagement() {
       </div>
     </div>
    </TooltipProvider>
+    );
+}
   );
 }
 
