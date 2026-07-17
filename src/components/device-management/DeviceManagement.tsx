@@ -197,6 +197,7 @@ export function DeviceManagement() {
 
   return (
    <TooltipProvider delayDuration={200}>
+    <>
     <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
       {/* Sidebar */}
       <aside className="hidden w-60 flex-col bg-sidebar text-sidebar-foreground md:flex">
