@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UsersRouteImport } from './routes/users'
 import { Route as SessionsRouteImport } from './routes/sessions'
+import { Route as SecurityRouteImport } from './routes/security'
 import { Route as ConsoleRouteImport } from './routes/console'
 import { Route as AgentsRouteImport } from './routes/agents'
 import { Route as IndexRouteImport } from './routes/index'
@@ -23,6 +24,11 @@ const UsersRoute = UsersRouteImport.update({
 const SessionsRoute = SessionsRouteImport.update({
   id: '/sessions',
   path: '/sessions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SecurityRoute = SecurityRouteImport.update({
+  id: '/security',
+  path: '/security',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ConsoleRoute = ConsoleRouteImport.update({
@@ -45,6 +51,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
   '/console': typeof ConsoleRoute
+  '/security': typeof SecurityRoute
   '/sessions': typeof SessionsRoute
   '/users': typeof UsersRoute
 }
@@ -52,6 +59,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
   '/console': typeof ConsoleRoute
+  '/security': typeof SecurityRoute
   '/sessions': typeof SessionsRoute
   '/users': typeof UsersRoute
 }
@@ -60,21 +68,30 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
   '/console': typeof ConsoleRoute
+  '/security': typeof SecurityRoute
   '/sessions': typeof SessionsRoute
   '/users': typeof UsersRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/agents' | '/console' | '/sessions' | '/users'
+  fullPaths: '/' | '/agents' | '/console' | '/security' | '/sessions' | '/users'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/agents' | '/console' | '/sessions' | '/users'
-  id: '__root__' | '/' | '/agents' | '/console' | '/sessions' | '/users'
+  to: '/' | '/agents' | '/console' | '/security' | '/sessions' | '/users'
+  id:
+    | '__root__'
+    | '/'
+    | '/agents'
+    | '/console'
+    | '/security'
+    | '/sessions'
+    | '/users'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AgentsRoute: typeof AgentsRoute
   ConsoleRoute: typeof ConsoleRoute
+  SecurityRoute: typeof SecurityRoute
   SessionsRoute: typeof SessionsRoute
   UsersRoute: typeof UsersRoute
 }
@@ -93,6 +110,13 @@ declare module '@tanstack/react-router' {
       path: '/sessions'
       fullPath: '/sessions'
       preLoaderRoute: typeof SessionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/security': {
+      id: '/security'
+      path: '/security'
+      fullPath: '/security'
+      preLoaderRoute: typeof SecurityRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/console': {
@@ -123,19 +147,10 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AgentsRoute: AgentsRoute,
   ConsoleRoute: ConsoleRoute,
+  SecurityRoute: SecurityRoute,
   SessionsRoute: SessionsRoute,
   UsersRoute: UsersRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
