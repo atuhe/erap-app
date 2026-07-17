@@ -1,10 +1,5 @@
 import { useMemo, useState } from "react";
 import {
-  LayoutDashboard,
-  MonitorSmartphone,
-  Radio,
-  History,
-  Settings as SettingsIcon,
   Search,
   Power,
   RotateCw,
@@ -12,8 +7,6 @@ import {
   Plug,
   ClipboardList,
   X,
-  Bell,
-  ChevronDown,
   Circle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -38,6 +31,7 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { AppShell } from "@/components/app-shell/AppShell";
 
 type Status = "online" | "offline";
 type Role = "admin" | "operator" | "viewer";
@@ -68,18 +62,9 @@ const DEVICES: Device[] = [
   { id: "DEV-10250", hostname: "TOK-DES-MB03", currentUser: "h.sato", branch: "Tokyo", department: "Design", status: "online", lastSeen: "just now", os: "Windows 11 Pro 23H2", ip: "10.88.2.31", rustDeskPort: 21118 },
 ];
 
-const NAV = [
-  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { key: "devices", label: "Devices", icon: MonitorSmartphone },
-  { key: "sessions", label: "Sessions", icon: Radio },
-  { key: "history", label: "My History", icon: History },
-  { key: "settings", label: "Settings", icon: SettingsIcon },
-];
-
 const UNIQUE = <K extends keyof Device>(k: K) => Array.from(new Set(DEVICES.map((d) => String(d[k]))));
 
 export function DeviceManagement() {
-  const [active, setActive] = useState("devices");
   const [role, setRole] = useState<Role>("admin");
   const [q, setQ] = useState("");
   const [branch, setBranch] = useState("all");
@@ -115,89 +100,33 @@ export function DeviceManagement() {
   };
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
-      {/* Sidebar */}
-      <aside className="hidden w-60 flex-col bg-sidebar text-sidebar-foreground md:flex">
-        <div className="flex h-14 items-center gap-2 border-b border-sidebar-border px-4">
-          <div className="grid h-8 w-8 place-items-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground">
-            <Plug className="h-4 w-4" />
-          </div>
-          <div className="leading-tight">
-            <div className="text-sm font-semibold">RemoteAdmin</div>
-            <div className="text-[11px] text-sidebar-foreground/60">Enterprise Console</div>
-          </div>
+    <AppShell
+      title="Devices"
+      subtitle="All managed Windows endpoints"
+      headerRight={
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search Device ID, Hostname, or Current User…"
+            className="h-9 pl-9"
+          />
         </div>
-        <nav className="flex-1 space-y-1 p-2">
-          {NAV.map((n) => {
-            const Icon = n.icon;
-            const isActive = active === n.key;
-            return (
-              <button
-                key={n.key}
-                onClick={() => setActive(n.key)}
-                className={cn(
-                  "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
-                  isActive
-                    ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {n.label}
-              </button>
-            );
-          })}
-        </nav>
-        <div className="border-t border-sidebar-border p-3 text-xs text-sidebar-foreground/60">
-          v2.4.1 · Build 20260717
-        </div>
-      </aside>
-
-      {/* Main */}
-      <div className="flex min-w-0 flex-1 flex-col">
-        {/* Top bar */}
-        <header className="flex h-14 items-center gap-3 border-b bg-card px-4">
-          <div className="min-w-0">
-            <h1 className="truncate text-sm font-semibold">Devices</h1>
-            <p className="text-[11px] text-muted-foreground">All managed Windows endpoints</p>
-          </div>
-          <div className="relative ml-4 hidden max-w-md flex-1 md:block">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search Device ID, Hostname, or Current User…"
-              className="h-9 pl-9"
-            />
-          </div>
-          <div className="ml-auto flex items-center gap-2">
-            <Select value={role} onValueChange={(v) => setRole(v as Role)}>
-              <SelectTrigger className="h-9 w-[140px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="admin">Role: Admin</SelectItem>
-                <SelectItem value="operator">Role: Operator</SelectItem>
-                <SelectItem value="viewer">Role: Viewer</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button variant="ghost" size="icon" aria-label="Notifications">
-              <Bell className="h-4 w-4" />
-            </Button>
-            <div className="flex items-center gap-2 rounded-md border px-2 py-1 text-xs">
-              <div className="grid h-6 w-6 place-items-center rounded-full bg-primary text-primary-foreground text-[10px] font-semibold">
-                AM
-              </div>
-              <span className="hidden sm:inline">Alex Morgan</span>
-              <ChevronDown className="h-3 w-3 text-muted-foreground" />
-            </div>
-          </div>
-        </header>
-
-        {/* Filters + Content */}
-        <div className="flex min-h-0 flex-1">
+      }
+    >
           <section className="flex min-w-0 flex-1 flex-col">
             <div className="flex flex-wrap items-center gap-2 border-b bg-card px-4 py-3">
+              <Select value={role} onValueChange={(v) => setRole(v as Role)}>
+                <SelectTrigger className="h-9 w-[140px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">Role: Admin</SelectItem>
+                  <SelectItem value="operator">Role: Operator</SelectItem>
+                  <SelectItem value="viewer">Role: Viewer</SelectItem>
+                </SelectContent>
+              </Select>
               <FilterSelect label="Branch" value={branch} onChange={setBranch} options={UNIQUE("branch")} />
               <FilterSelect label="Department" value={department} onChange={setDepartment} options={UNIQUE("department")} />
               <FilterSelect
@@ -357,9 +286,7 @@ export function DeviceManagement() {
               </ScrollArea>
             </aside>
           )}
-        </div>
-      </div>
-    </div>
+    </AppShell>
   );
 }
 
