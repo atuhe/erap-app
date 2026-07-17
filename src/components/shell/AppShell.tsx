@@ -33,7 +33,9 @@ export function setRole(r: ErapRole) {
 }
 export function subscribeRole(cb: (r: ErapRole) => void) {
   roleListeners.add(cb);
-  return () => roleListeners.delete(cb);
+  return () => {
+    roleListeners.delete(cb);
+  };
 }
 
 import { useEffect } from "react";
