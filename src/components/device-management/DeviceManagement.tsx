@@ -471,8 +471,8 @@ export function DeviceManagement() {
    </TooltipProvider>
     );
 }
-  );
-}
+
+function DeviceManagementFooter() { return null; }
 
 function GuardedButton({
   children, disabled, onClick, tip, variant, className,
