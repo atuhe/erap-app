@@ -40,6 +40,13 @@ import {
   X,
   ClipboardList,
   ShieldAlert,
+  Trash2,
+  Power,
+  HeartPulse,
+  History,
+  AlertOctagon,
+  Lightbulb,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -113,6 +120,94 @@ const AGENTS: Agent[] = [
 ];
 
 const PENDING_APPROVALS = 4;
+
+// ────────────────────────────────────────────────────────────────────────────
+// Deployment batches with per-device step progress
+// ────────────────────────────────────────────────────────────────────────────
+
+type BatchStepStatus = "pending" | "running" | "success" | "failed" | "skipped";
+
+interface BatchDeviceStep {
+  key: string;
+  label: string;
+  status: BatchStepStatus;
+  detail?: string;
+}
+
+interface BatchDevice {
+  hostname: string;
+  ip: string;
+  status: "queued" | "in_progress" | "completed" | "failed" | "retrying";
+  steps: BatchDeviceStep[];
+}
+
+interface DeploymentBatch {
+  id: string;
+  title: string;
+  when: string;
+  status: "Completed" | "In progress" | "Staged" | "Failed";
+  devices: BatchDevice[];
+}
+
+const BATCH_STEP_TEMPLATE = [
+  "Queued",
+  "Package fetched",
+  "MSI signature verified",
+  "Installer executed",
+  "Post-install checks",
+  "Registered with broker",
+];
+
+function mkSteps(upTo: number, failAt?: number): BatchDeviceStep[] {
+  return BATCH_STEP_TEMPLATE.map((label, i) => {
+    let status: BatchStepStatus = "pending";
+    if (failAt !== undefined && i === failAt) status = "failed";
+    else if (failAt !== undefined && i > failAt) status = "skipped";
+    else if (i < upTo) status = "success";
+    else if (i === upTo) status = "running";
+    return {
+      key: `${i}-${label}`,
+      label,
+      status,
+      detail: status === "failed" ? "MSI exit 1603 — access denied on target" : undefined,
+    };
+  });
+}
+
+const DEPLOYMENT_BATCHES: DeploymentBatch[] = [
+  {
+    id: "BATCH-2148", title: "3.2.1 → New York Finance", when: "Today 09:12", status: "Completed",
+    devices: [
+      { hostname: "NYC-FIN-WS01", ip: "10.24.11.42", status: "completed", steps: mkSteps(6) },
+      { hostname: "NYC-FIN-WS02", ip: "10.24.11.43", status: "completed", steps: mkSteps(6) },
+      { hostname: "NYC-FIN-WS03", ip: "10.24.11.44", status: "completed", steps: mkSteps(6) },
+    ],
+  },
+  {
+    id: "BATCH-2147", title: "3.2.1 → London Support", when: "Today 08:55", status: "In progress",
+    devices: [
+      { hostname: "LON-HR-LT14", ip: "10.44.9.18",   status: "completed",   steps: mkSteps(6) },
+      { hostname: "LON-FIN-LT02", ip: "10.44.9.44",  status: "in_progress", steps: mkSteps(3) },
+      { hostname: "LON-ENG-WS08", ip: "10.44.9.201", status: "in_progress", steps: mkSteps(2) },
+      { hostname: "LON-OPS-WS41", ip: "10.44.9.87",  status: "queued",      steps: mkSteps(0) },
+    ],
+  },
+  {
+    id: "BATCH-2146", title: "3.2.0 Staged → Berlin Eng lab", when: "Yesterday", status: "Failed",
+    devices: [
+      { hostname: "BER-ENG-WS22", ip: "10.61.4.201", status: "completed", steps: mkSteps(6) },
+      { hostname: "BER-HR-WS10",  ip: "10.61.4.115", status: "failed",    steps: mkSteps(0, 3) },
+      { hostname: "BER-ENG-WS23", ip: "10.61.4.202", status: "failed",    steps: mkSteps(0, 2) },
+    ],
+  },
+  {
+    id: "BATCH-2145", title: "Rollback → Tokyo Ops", when: "2 days ago", status: "Completed",
+    devices: [
+      { hostname: "TOK-OPS-WS05", ip: "10.88.2.9",  status: "completed", steps: mkSteps(6) },
+      { hostname: "TOK-DES-MB03", ip: "10.88.2.31", status: "completed", steps: mkSteps(6) },
+    ],
+  },
+];
 
 interface Version {
   version: string;
@@ -500,6 +595,10 @@ function DashboardTab({
   const [department, setDepartment] = useState("all");
   const [status, setStatus] = useState<string>("all");
   const [version, setVersion] = useState("all");
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
+  const [bulkAction, setBulkAction] = useState<null | "enable" | "disable" | "update" | "remove">(null);
+  const [diagnosticsId, setDiagnosticsId] = useState<string | null>(null);
+  const [openBatch, setOpenBatch] = useState<DeploymentBatch | null>(null);
 
   const branches = useMemo(() => Array.from(new Set(AGENTS.map((a) => a.branch))), []);
   const departments = useMemo(() => Array.from(new Set(AGENTS.map((a) => a.department))), []);
@@ -540,6 +639,48 @@ function DashboardTab({
     else toast.error(`Blocked: ${note ?? "insufficient permissions"}`);
   };
 
+  const selectedAgents = useMemo(
+    () => AGENTS.filter((a) => selectedRows.has(a.id)),
+    [selectedRows],
+  );
+  const allShownSelected = filtered.length > 0 && filtered.every((a) => selectedRows.has(a.id));
+  const someShownSelected = filtered.some((a) => selectedRows.has(a.id));
+
+  const toggleAll = (v: boolean) => {
+    const next = new Set(selectedRows);
+    if (v) filtered.forEach((a) => next.add(a.id));
+    else filtered.forEach((a) => next.delete(a.id));
+    setSelectedRows(next);
+  };
+  const toggleOne = (id: string, v: boolean) => {
+    const next = new Set(selectedRows);
+    if (v) next.add(id); else next.delete(id);
+    setSelectedRows(next);
+  };
+
+  const openBulk = (a: "enable" | "disable" | "update" | "remove") => {
+    if (!canManage) {
+      toast.error("Your role can't perform bulk agent actions");
+      logAudit({ actor: viewerName, actorRole: role, category: "device", action: `bulk_${a}`, status: "denied", details: "Role lacks manage_policies" });
+      return;
+    }
+    if (selectedRows.size === 0) return;
+    setBulkAction(a);
+  };
+
+  const runBulk = (a: "enable" | "disable" | "update" | "remove") => {
+    logAudit({
+      actor: viewerName, actorRole: role, category: "device",
+      action: `bulk_${a}`,
+      target: `${selectedRows.size} devices`,
+      status: "success",
+      details: selectedAgents.map((x) => x.hostname).join(", ").slice(0, 200),
+    });
+    toast.success(`${labelForBulk(a)} queued for ${selectedRows.size} device${selectedRows.size === 1 ? "" : "s"}`);
+    setBulkAction(null);
+    setSelectedRows(new Set());
+  };
+
   return (
     <>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
@@ -574,9 +715,29 @@ function DashboardTab({
       </Card>
 
       <Card className="overflow-hidden">
+        {selectedRows.size > 0 && (
+          <div className="flex flex-wrap items-center gap-2 border-b bg-primary/5 px-4 py-2">
+            <span className="text-sm font-medium">{selectedRows.size} selected</span>
+            <span className="text-xs text-muted-foreground">Bulk actions apply to every selected agent.</span>
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <GuardedBulkButton canManage={canManage} onClick={() => openBulk("enable")} icon={Play} label="Enable" />
+              <GuardedBulkButton canManage={canManage} onClick={() => openBulk("disable")} icon={Power} label="Disable" />
+              <GuardedBulkButton canManage={canManage} onClick={() => openBulk("update")} icon={RefreshCw} label="Push Update" />
+              <GuardedBulkButton canManage={canManage} onClick={() => openBulk("remove")} icon={Trash2} label="Remove" tone="danger" />
+              <Button size="sm" variant="ghost" onClick={() => setSelectedRows(new Set())}>Clear</Button>
+            </div>
+          </div>
+        )}
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40">
+              <TableHead className="w-10">
+                <Checkbox
+                  checked={allShownSelected ? true : someShownSelected ? "indeterminate" : false}
+                  onCheckedChange={(v) => toggleAll(!!v)}
+                  aria-label="Select all shown"
+                />
+              </TableHead>
               <TableHead>Device Name</TableHead>
               <TableHead className="w-[120px]">Device ID</TableHead>
               <TableHead>Branch</TableHead>
@@ -590,8 +751,24 @@ function DashboardTab({
           </TableHeader>
           <TableBody>
             {filtered.map((a) => (
-              <TableRow key={a.id}>
-                <TableCell className="font-medium">{a.hostname}</TableCell>
+              <TableRow
+                key={a.id}
+                data-state={diagnosticsId === a.id ? "selected" : undefined}
+                className="cursor-pointer"
+                onClick={() => setDiagnosticsId(a.id)}
+              >
+                <TableCell onClick={(e) => e.stopPropagation()}>
+                  <Checkbox
+                    checked={selectedRows.has(a.id)}
+                    onCheckedChange={(v) => toggleOne(a.id, !!v)}
+                    aria-label={`Select ${a.hostname}`}
+                  />
+                </TableCell>
+                <TableCell className="font-medium">
+                  <button type="button" className="text-left hover:underline" onClick={(e) => { e.stopPropagation(); setDiagnosticsId(a.id); }}>
+                    {a.hostname}
+                  </button>
+                </TableCell>
                 <TableCell className="font-mono text-xs text-muted-foreground">{a.id}</TableCell>
                 <TableCell>{a.branch}</TableCell>
                 <TableCell>{a.department}</TableCell>
@@ -603,8 +780,16 @@ function DashboardTab({
                 <TableCell className="text-muted-foreground">{a.os}</TableCell>
                 <TableCell className="text-muted-foreground">{a.lastCheckIn}</TableCell>
                 <TableCell><AgentStatusPill status={a.status} /></TableCell>
-                <TableCell className="text-right">
+                <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                   <div className="inline-flex items-center gap-1">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button size="sm" variant="outline" className="h-8 px-2" onClick={() => setDiagnosticsId(a.id)}>
+                          <Activity className="h-3.5 w-3.5" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Diagnostics</TooltipContent>
+                    </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span>
@@ -660,7 +845,7 @@ function DashboardTab({
             ))}
             {filtered.length === 0 && (
               <TableRow>
-                <TableCell colSpan={9} className="h-24 text-center text-sm text-muted-foreground">No agents match the current filters.</TableCell>
+                <TableCell colSpan={10} className="h-24 text-center text-sm text-muted-foreground">No agents match the current filters.</TableCell>
               </TableRow>
             )}
           </TableBody>
@@ -700,20 +885,33 @@ function DashboardTab({
             <CardDescription>Last operations across the private WAN</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
-            {[
-              { id: "BATCH-2148", title: "3.2.1 → New York Finance",       count: 128, status: "Completed",  when: "Today 09:12" },
-              { id: "BATCH-2147", title: "3.2.1 → London Support",         count: 74,  status: "In progress", when: "Today 08:55" },
-              { id: "BATCH-2146", title: "3.2.0 Staged → Berlin Eng lab",  count: 22,  status: "Staged",      when: "Yesterday" },
-              { id: "BATCH-2145", title: "Rollback → Tokyo Ops",           count: 6,   status: "Completed",   when: "2 days ago" },
-            ].map((b) => (
-              <div key={b.id} className="flex items-center justify-between rounded-md border bg-muted/20 px-3 py-2">
-                <div className="min-w-0">
-                  <div className="text-sm font-medium truncate">{b.title}</div>
-                  <div className="text-xs text-muted-foreground">{b.id} · {b.when} · {b.count} devices</div>
-                </div>
-                <Badge variant="outline" className="font-normal">{b.status}</Badge>
-              </div>
-            ))}
+            {DEPLOYMENT_BATCHES.map((b) => {
+              const done = b.devices.filter((d) => d.status === "completed").length;
+              const failed = b.devices.filter((d) => d.status === "failed").length;
+              const pct = Math.round((done / b.devices.length) * 100);
+              return (
+                <button
+                  key={b.id}
+                  type="button"
+                  onClick={() => setOpenBatch(b)}
+                  className="w-full rounded-md border bg-muted/20 px-3 py-2 text-left transition-colors hover:bg-muted/40"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium">{b.title}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {b.id} · {b.when} · {b.devices.length} devices · {done} done{failed ? ` · ${failed} failed` : ""}
+                      </div>
+                    </div>
+                    <BatchStatusPill status={b.status} />
+                  </div>
+                  <div className="mt-2 flex items-center gap-2">
+                    <Progress value={pct} className="h-1.5 flex-1" />
+                    <span className="w-10 text-right font-mono text-xs text-muted-foreground">{pct}%</span>
+                  </div>
+                </button>
+              );
+            })}
             <div className="pt-1">
               <Button variant="outline" size="sm" onClick={() => setWizardOpen(true)} disabled={!canManage}>
                 <Download className="mr-2 h-3.5 w-3.5" /> New deployment
@@ -722,6 +920,23 @@ function DashboardTab({
           </CardContent>
         </Card>
       </div>
+
+      <BulkActionConfirm
+        action={bulkAction}
+        agents={selectedAgents}
+        onCancel={() => setBulkAction(null)}
+        onConfirm={runBulk}
+      />
+      <BatchProgressDialog
+        batch={openBatch}
+        onClose={() => setOpenBatch(null)}
+        role={role}
+        viewerName={viewerName}
+      />
+      <DiagnosticsPanel
+        agent={diagnosticsId ? AGENTS.find((a) => a.id === diagnosticsId) ?? null : null}
+        onClose={() => setDiagnosticsId(null)}
+      />
     </>
   );
 }
@@ -1632,4 +1847,497 @@ function labelForAction(a: string) {
 
 function humanize(k: string) {
   return k.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase());
+}
+
+function labelForBulk(a: "enable" | "disable" | "update" | "remove") {
+  return a === "enable" ? "Enable" : a === "disable" ? "Disable" : a === "update" ? "Push update" : "Remove";
+}
+
+function GuardedBulkButton({
+  canManage, onClick, icon: Icon, label, tone,
+}: { canManage: boolean; onClick: () => void; icon: typeof Play; label: string; tone?: "danger" }) {
+  const btn = (
+    <Button
+      size="sm"
+      variant={tone === "danger" ? "destructive" : "outline"}
+      className="h-8 gap-1.5"
+      disabled={!canManage}
+      onClick={onClick}
+    >
+      <Icon className="h-3.5 w-3.5" /> {label}
+    </Button>
+  );
+  if (canManage) return btn;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild><span>{btn}</span></TooltipTrigger>
+      <TooltipContent>Requires manage_policies permission</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function BatchStatusPill({ status }: { status: DeploymentBatch["status"] }) {
+  const cls =
+    status === "Completed" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+    : status === "In progress" ? "border-primary/40 bg-primary/10 text-primary"
+    : status === "Failed" ? "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300"
+    : "border-border bg-muted text-muted-foreground";
+  return <Badge variant="outline" className={cn("font-normal", cls)}>{status}</Badge>;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Bulk action confirmation wizard
+// ────────────────────────────────────────────────────────────────────────────
+
+function BulkActionConfirm({
+  action, agents, onCancel, onConfirm,
+}: {
+  action: null | "enable" | "disable" | "update" | "remove";
+  agents: Agent[];
+  onCancel: () => void;
+  onConfirm: (a: "enable" | "disable" | "update" | "remove") => void;
+}) {
+  const [step, setStep] = useState<1 | 2>(1);
+  const [ack, setAck] = useState(false);
+
+  const open = !!action;
+  const a = action ?? "disable";
+  const isDestructive = a === "remove";
+  const label = labelForBulk(a);
+
+  const summary =
+    a === "enable"  ? "Selected agents will resume communication with the broker."
+    : a === "disable" ? "Selected agents will stop accepting sessions until re-enabled."
+    : a === "update"  ? `Selected agents will be scheduled for the current package (${CURRENT_VERSION}).`
+    :                   "Selected agents will be uninstalled and removed from inventory. This cannot be undone from this screen.";
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { onCancel(); setStep(1); setAck(false); } }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            {isDestructive && <AlertOctagon className="h-4 w-4 text-rose-500" />}
+            Bulk action — {label}
+          </DialogTitle>
+          <DialogDescription>
+            {agents.length} agent{agents.length === 1 ? "" : "s"} selected.
+          </DialogDescription>
+        </DialogHeader>
+
+        <Stepper step={step} labels={["Review targets", "Confirm"]} />
+
+        {step === 1 && (
+          <div className="space-y-2">
+            <div className="rounded-md border bg-muted/20 p-3 text-xs text-muted-foreground">{summary}</div>
+            <div className="max-h-56 overflow-auto rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/40">
+                    <TableHead>Device</TableHead>
+                    <TableHead>Branch</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {agents.map((ag) => (
+                    <TableRow key={ag.id}>
+                      <TableCell className="font-medium">{ag.hostname}<div className="text-xs text-muted-foreground">{ag.ip}</div></TableCell>
+                      <TableCell>{ag.branch}</TableCell>
+                      <TableCell><AgentStatusPill status={ag.status} /></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="space-y-3">
+            <div className={cn(
+              "rounded-md border p-3 text-xs",
+              isDestructive ? "border-rose-500/30 bg-rose-500/5 text-rose-700 dark:text-rose-300" : "bg-muted/20 text-muted-foreground",
+            )}>
+              You are about to <strong>{label.toLowerCase()}</strong> {agents.length} agent{agents.length === 1 ? "" : "s"}.
+              {isDestructive && " An audit entry will be created for every affected endpoint."}
+            </div>
+            <label className="flex items-start gap-2 text-sm">
+              <Checkbox checked={ack} onCheckedChange={(v) => setAck(!!v)} className="mt-0.5" />
+              <span>I understand this action will be applied to all selected agents on the private WAN.</span>
+            </label>
+          </div>
+        )}
+
+        <DialogFooter className="flex items-center justify-between gap-2 sm:justify-between">
+          <Button variant="ghost" onClick={() => (step === 1 ? (onCancel(), setStep(1), setAck(false)) : setStep(1))}>
+            <ChevronLeft className="mr-1 h-4 w-4" /> {step === 1 ? "Cancel" : "Back"}
+          </Button>
+          {step === 1 ? (
+            <Button onClick={() => setStep(2)}>Continue <ChevronRight className="ml-1 h-4 w-4" /></Button>
+          ) : (
+            <Button variant={isDestructive ? "destructive" : "default"} disabled={!ack} onClick={() => { onConfirm(a); setStep(1); setAck(false); }}>
+              Confirm {label}
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Per-batch deployment progress dialog
+// ────────────────────────────────────────────────────────────────────────────
+
+function BatchProgressDialog({
+  batch, onClose, role, viewerName,
+}: { batch: DeploymentBatch | null; onClose: () => void; role: ErapRole; viewerName: string }) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const canManage = hasPermission(role, "manage_policies");
+
+  const retry = (device: string, mode: "step" | "device" | "batch") => {
+    if (!canManage) {
+      toast.error("Your role can't retry installs");
+      logAudit({ actor: viewerName, actorRole: role, category: "device", action: "batch_retry", target: device, status: "denied", details: mode });
+      return;
+    }
+    logAudit({ actor: viewerName, actorRole: role, category: "device", action: "batch_retry", target: device, status: "success", details: mode });
+    toast.success(`Retry queued — ${device}`);
+  };
+
+  return (
+    <Dialog open={!!batch} onOpenChange={(v) => !v && (onClose(), setExpanded(null))}>
+      <DialogContent className="max-w-3xl">
+        {batch && (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                {batch.title}
+                <BatchStatusPill status={batch.status} />
+              </DialogTitle>
+              <DialogDescription>{batch.id} · {batch.when} · {batch.devices.length} devices</DialogDescription>
+            </DialogHeader>
+
+            <div className="grid grid-cols-4 gap-3">
+              {(() => {
+                const done = batch.devices.filter((d) => d.status === "completed").length;
+                const running = batch.devices.filter((d) => d.status === "in_progress" || d.status === "retrying").length;
+                const failed = batch.devices.filter((d) => d.status === "failed").length;
+                const queued = batch.devices.filter((d) => d.status === "queued").length;
+                return (
+                  <>
+                    <SummaryCard title="Completed" body={String(done)} />
+                    <SummaryCard title="In progress" body={String(running)} />
+                    <SummaryCard title="Failed" body={String(failed)} />
+                    <SummaryCard title="Queued" body={String(queued)} />
+                  </>
+                );
+              })()}
+            </div>
+
+            <ScrollArea className="max-h-[420px]">
+              <div className="space-y-2 pr-2">
+                {batch.devices.map((d) => {
+                  const isOpen = expanded === d.hostname;
+                  const progress = Math.round(
+                    (d.steps.filter((s) => s.status === "success").length / d.steps.length) * 100,
+                  );
+                  return (
+                    <div key={d.hostname} className="rounded-md border">
+                      <button
+                        type="button"
+                        onClick={() => setExpanded(isOpen ? null : d.hostname)}
+                        className="flex w-full items-center gap-3 px-3 py-2 text-left"
+                      >
+                        <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", isOpen && "rotate-90")} />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-medium">{d.hostname}</div>
+                          <div className="text-xs text-muted-foreground">{d.ip}</div>
+                        </div>
+                        <div className="hidden w-40 items-center gap-2 md:flex">
+                          <Progress value={progress} className="h-1.5 flex-1" />
+                          <span className="w-8 text-right font-mono text-xs text-muted-foreground">{progress}%</span>
+                        </div>
+                        <DeviceBatchPill status={d.status} />
+                        {(d.status === "failed" || d.status === "in_progress") && (
+                          <span onClick={(e) => e.stopPropagation()}>
+                            <Button size="sm" variant="outline" className="h-7 gap-1" onClick={() => retry(d.hostname, "device")} disabled={!canManage}>
+                              <RotateCcw className="h-3 w-3" /> Retry
+                            </Button>
+                          </span>
+                        )}
+                      </button>
+                      {isOpen && (
+                        <div className="border-t bg-muted/10 p-3">
+                          <ol className="space-y-2">
+                            {d.steps.map((s, i) => (
+                              <li key={s.key} className="flex items-start gap-3">
+                                <StepIcon status={s.status} />
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2 text-sm">
+                                    <span className="font-medium">{i + 1}. {s.label}</span>
+                                    <span className="text-xs text-muted-foreground">{stepStatusLabel(s.status)}</span>
+                                  </div>
+                                  {s.detail && <div className="mt-0.5 text-xs text-rose-600 dark:text-rose-400">{s.detail}</div>}
+                                </div>
+                                {s.status === "failed" && (
+                                  <Button size="sm" variant="outline" className="h-7 gap-1" onClick={() => retry(d.hostname, "step")} disabled={!canManage}>
+                                    <RotateCcw className="h-3 w-3" /> Retry step
+                                  </Button>
+                                )}
+                              </li>
+                            ))}
+                          </ol>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </ScrollArea>
+
+            <DialogFooter className="justify-between sm:justify-between">
+              <div className="text-xs text-muted-foreground">Offline WAN batch · installer logs are pulled on next check-in</div>
+              <div className="flex gap-2">
+                <Button variant="ghost" onClick={() => (onClose(), setExpanded(null))}>Close</Button>
+                <Button
+                  variant="outline"
+                  className="gap-1"
+                  disabled={!canManage || batch.devices.every((d) => d.status !== "failed")}
+                  onClick={() => retry(batch.id, "batch")}
+                >
+                  <RotateCcw className="h-3.5 w-3.5" /> Retry failed
+                </Button>
+              </div>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function StepIcon({ status }: { status: BatchStepStatus }) {
+  if (status === "success") return <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-500" />;
+  if (status === "failed")  return <XCircle       className="mt-0.5 h-4 w-4 text-rose-500" />;
+  if (status === "running") return <Loader2       className="mt-0.5 h-4 w-4 animate-spin text-primary" />;
+  if (status === "skipped") return <X             className="mt-0.5 h-4 w-4 text-muted-foreground" />;
+  return <Circle className="mt-0.5 h-4 w-4 text-muted-foreground" />;
+}
+
+function stepStatusLabel(s: BatchStepStatus) {
+  return s === "success" ? "Done" : s === "failed" ? "Failed" : s === "running" ? "Running…" : s === "skipped" ? "Skipped" : "Pending";
+}
+
+function DeviceBatchPill({ status }: { status: BatchDevice["status"] }) {
+  const map: Record<BatchDevice["status"], { label: string; cls: string }> = {
+    completed:   { label: "Completed",   cls: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" },
+    in_progress: { label: "In progress", cls: "border-primary/40 bg-primary/10 text-primary" },
+    retrying:    { label: "Retrying",    cls: "border-primary/40 bg-primary/10 text-primary" },
+    failed:      { label: "Failed",      cls: "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300" },
+    queued:      { label: "Queued",      cls: "border-border bg-muted text-muted-foreground" },
+  };
+  const s = map[status];
+  return <Badge variant="outline" className={cn("font-normal", s.cls)}>{s.label}</Badge>;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Right-side diagnostics panel
+// ────────────────────────────────────────────────────────────────────────────
+
+function makeSeries(seed: number, base: number, jitter: number, len = 24) {
+  const out: number[] = [];
+  let v = base;
+  let s = seed;
+  for (let i = 0; i < len; i++) {
+    s = (s * 9301 + 49297) % 233280;
+    v = Math.max(0, Math.min(100, v + ((s / 233280) - 0.5) * jitter));
+    out.push(Math.round(v));
+  }
+  return out;
+}
+
+function Sparkline({ data, tone = "primary" }: { data: number[]; tone?: "primary" | "warn" | "danger" }) {
+  const max = Math.max(1, ...data);
+  const min = Math.min(0, ...data);
+  const w = 100, h = 28;
+  const dx = w / (data.length - 1);
+  const norm = (v: number) => h - ((v - min) / (max - min || 1)) * h;
+  const d = data.map((v, i) => `${i === 0 ? "M" : "L"}${(i * dx).toFixed(1)},${norm(v).toFixed(1)}`).join(" ");
+  const stroke =
+    tone === "danger" ? "rgb(244 63 94)" :
+    tone === "warn"   ? "rgb(245 158 11)" :
+                         "hsl(var(--primary))";
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="h-8 w-full">
+      <path d={d} fill="none" stroke={stroke} strokeWidth={1.2} vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
+
+function DiagnosticsPanel({ agent, onClose }: { agent: Agent | null; onClose: () => void }) {
+  if (!agent) return null;
+
+  const seed = agent.id.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
+  const cpuSeries = makeSeries(seed,       agent.cpu || 5,   12);
+  const memSeries = makeSeries(seed + 11,  agent.mem || 20,  8);
+  const latSeries = makeSeries(seed + 23,  agent.latencyMs || 15, 10);
+
+  const offline = agent.status === "offline" || agent.status === "install_failed";
+  const outdated = agent.agentVersion !== "3.2.1";
+
+  const heartbeats = Array.from({ length: 12 }).map((_, i) => {
+    if (offline && i < 8) return { t: `${(i + 1) * 15}m ago`, ok: false };
+    return { t: `${i * 8}s ago`, ok: true };
+  });
+
+  const hints: { title: string; body: string; tone: "warn" | "danger" | "info" }[] = [];
+  if (offline) {
+    hints.push({ title: "No heartbeat for over 3 hours", body: "Broker last saw a hello packet at check-in. Verify WAN link, DNS to broker 10.0.0.4, and Windows service ERAPAgentSvc is running.", tone: "danger" });
+    if (agent.cert === "expired") hints.push({ title: "Agent certificate expired", body: "Kerberos handshake will fail. Re-issue via internal CA and push a reinstall.", tone: "danger" });
+    if (!agent.authOk) hints.push({ title: "Authentication failing", body: "Machine SPN mismatch is the most common cause on Server 2022. Reset computer account and rejoin.", tone: "warn" });
+  }
+  if (outdated) {
+    hints.push({ title: `Agent ${agent.agentVersion} is behind production (${CURRENT_VERSION})`, body: "Schedule a Push Update from the bulk actions or open the deployment wizard.", tone: "warn" });
+  }
+  if (agent.cert === "expiring") {
+    hints.push({ title: "Certificate expiring within 30 days", body: "Renewal window is open. Rotate via the offline PKI job.", tone: "warn" });
+  }
+  if (!agent.compliant) {
+    hints.push({ title: "Policy compliance drift detected", body: "Agent settings differ from assigned policy. Reassign to restore baseline.", tone: "warn" });
+  }
+  if (hints.length === 0) {
+    hints.push({ title: "No issues detected", body: "Telemetry within thresholds. Continue routine monitoring.", tone: "info" });
+  }
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40 bg-black/20" onClick={onClose} />
+      <aside className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l bg-card shadow-xl">
+        <div className="flex items-center gap-2 border-b px-4 py-3">
+          <Activity className="h-4 w-4 text-primary" />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold">{agent.hostname}</div>
+            <div className="text-xs text-muted-foreground">{agent.id} · {agent.ip}</div>
+          </div>
+          <AgentStatusPill status={agent.status} />
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose} aria-label="Close diagnostics">
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <ScrollArea className="flex-1">
+          <div className="space-y-4 p-4">
+            <section>
+              <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <TrendIcon /> Metrics — last 2 hours
+              </div>
+              <div className="space-y-2">
+                <MetricRow label="CPU"     value={`${agent.cpu}%`}       series={cpuSeries} tone={agent.cpu > 80 ? "danger" : agent.cpu > 60 ? "warn" : "primary"} />
+                <MetricRow label="Memory"  value={`${agent.mem}%`}       series={memSeries} tone={agent.mem > 80 ? "danger" : agent.mem > 60 ? "warn" : "primary"} />
+                <MetricRow label="Latency" value={`${agent.latencyMs} ms`} series={latSeries} tone={agent.latencyMs > 60 ? "warn" : "primary"} />
+              </div>
+            </section>
+
+            <Separator />
+
+            <section>
+              <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <HeartPulse className="h-3.5 w-3.5" /> Heartbeat history
+              </div>
+              <div className="grid grid-cols-6 gap-1">
+                {heartbeats.map((h, i) => (
+                  <Tooltip key={i}>
+                    <TooltipTrigger asChild>
+                      <div className={cn(
+                        "h-6 rounded-sm",
+                        h.ok ? "bg-emerald-500/70" : "bg-rose-500/60",
+                      )} />
+                    </TooltipTrigger>
+                    <TooltipContent>{h.ok ? "OK" : "Missed"} · {h.t}</TooltipContent>
+                  </Tooltip>
+                ))}
+              </div>
+              <div className="mt-2 flex justify-between text-[11px] text-muted-foreground">
+                <span>Older</span><span>Latest — {agent.heartbeat}</span>
+              </div>
+            </section>
+
+            <Separator />
+
+            <section>
+              <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <Lightbulb className="h-3.5 w-3.5" /> Root-cause hints
+              </div>
+              <div className="space-y-2">
+                {hints.map((h, i) => (
+                  <div key={i} className={cn(
+                    "rounded-md border p-3 text-xs",
+                    h.tone === "danger" ? "border-rose-500/30 bg-rose-500/5"
+                    : h.tone === "warn"  ? "border-amber-500/30 bg-amber-500/5"
+                    : "bg-muted/20",
+                  )}>
+                    <div className={cn(
+                      "text-sm font-medium",
+                      h.tone === "danger" ? "text-rose-700 dark:text-rose-300"
+                      : h.tone === "warn"  ? "text-amber-700 dark:text-amber-300"
+                      : "text-foreground",
+                    )}>{h.title}</div>
+                    <div className="mt-1 text-muted-foreground">{h.body}</div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <Separator />
+
+            <section>
+              <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <History className="h-3.5 w-3.5" /> Recent events
+              </div>
+              <ol className="space-y-2 text-xs">
+                {AGENT_LOGS.filter((l) => l.device === agent.hostname).slice(0, 4).map((l, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <ResultDot result={l.result} />
+                    <div className="min-w-0">
+                      <div><span className="font-medium">{l.action}</span> — {l.detail}</div>
+                      <div className="text-muted-foreground">{l.ts} · {l.user}</div>
+                    </div>
+                  </li>
+                ))}
+                {AGENT_LOGS.filter((l) => l.device === agent.hostname).length === 0 && (
+                  <li className="text-muted-foreground">No recent lifecycle events for this device.</li>
+                )}
+              </ol>
+            </section>
+          </div>
+        </ScrollArea>
+      </aside>
+    </>
+  );
+}
+
+function MetricRow({ label, value, series, tone }: { label: string; value: string; series: number[]; tone: "primary" | "warn" | "danger" }) {
+  return (
+    <div className="rounded-md border bg-muted/10 p-3">
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted-foreground">{label}</span>
+        <span className="text-sm font-semibold">{value}</span>
+      </div>
+      <Sparkline data={series} tone={tone} />
+    </div>
+  );
+}
+
+function TrendIcon() {
+  return <Activity className="h-3.5 w-3.5" />;
+}
+
+function ResultDot({ result }: { result: AgentLog["result"] }) {
+  const cls =
+    result === "success" ? "bg-emerald-500"
+    : result === "failed" ? "bg-rose-500"
+    : result === "denied" ? "bg-amber-500"
+    : "bg-muted-foreground";
+  return <span className={cn("mt-1 h-1.5 w-1.5 shrink-0 rounded-full", cls)} />;
 }
