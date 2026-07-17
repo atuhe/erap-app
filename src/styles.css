@@ -97,6 +97,14 @@
   --sidebar-ring: oklch(0.6 0.2 258);
   --status-online: oklch(0.68 0.17 148);
   --status-offline: oklch(0.62 0.22 27);
+  --success: oklch(0.68 0.17 148);
+  --success-foreground: oklch(0.99 0.005 148);
+  --warning: oklch(0.78 0.16 78);
+  --warning-foreground: oklch(0.2 0.05 78);
+  --danger: oklch(0.62 0.22 27);
+  --danger-foreground: oklch(0.99 0.005 27);
+  --info: oklch(0.62 0.16 240);
+  --info-foreground: oklch(0.99 0.005 240);
 }
 
 .dark {
@@ -132,6 +140,19 @@
   --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.551 0.027 264.364);
+}
+
+@theme inline {
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --font-display: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 @layer base {
