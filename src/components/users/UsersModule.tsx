@@ -62,6 +62,8 @@ import {
   ErapRole, ROLE_LABELS, ROLE_DESCRIPTIONS, ROLE_PERMISSIONS,
   PERMISSION_LABELS, Permission, ROLE_NAV, hasPermission,
 } from "@/lib/erap-roles";
+import { logAudit } from "@/lib/audit-log";
+import { AuditLogView } from "@/components/audit/AuditLogView";
 
 type Status = "active" | "disabled" | "locked";
 
@@ -126,6 +128,9 @@ export function UsersModule() {
   const canManageUsers = hasPermission(role, "manage_users");
   const canManageRoles = hasPermission(role, "manage_roles");
   const canManagePolicies = hasPermission(role, "manage_policies");
+  const canViewAudit = hasPermission(role, "view_audit");
+  const canExportReports = hasPermission(role, "export_reports");
+  const viewerName = "Alex Morgan";
 
   const pathname = useRouterState({ select: (r) => r.location.pathname });
   const nav = ROLE_NAV[role];
@@ -212,17 +217,27 @@ export function UsersModule() {
                   <TabsTrigger value="access" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4">Device Access</TabsTrigger>
                   <TabsTrigger value="policies" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4">Approval Policies</TabsTrigger>
                   <TabsTrigger value="activity" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4">Activity</TabsTrigger>
+                  <TabsTrigger value="audit" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4">Audit Logs</TabsTrigger>
                 </TabsList>
               </div>
 
               <ScrollArea className="flex-1">
                 <TabsContent value="dashboard" className="m-0 p-4"><DashboardTab /></TabsContent>
-                <TabsContent value="users" className="m-0 p-4"><UsersTab canManage={canManageUsers} viewerRole={role} /></TabsContent>
+                <TabsContent value="users" className="m-0 p-4"><UsersTab canManage={canManageUsers} viewerRole={role} viewerName={viewerName} /></TabsContent>
                 <TabsContent value="roles" className="m-0 p-4"><RolesTab canManage={canManageRoles} /></TabsContent>
                 <TabsContent value="matrix" className="m-0 p-4"><MatrixTab /></TabsContent>
                 <TabsContent value="access" className="m-0 p-4"><AccessTab canManage={canManageUsers} /></TabsContent>
                 <TabsContent value="policies" className="m-0 p-4"><PoliciesTab canManage={canManagePolicies} /></TabsContent>
                 <TabsContent value="activity" className="m-0 p-4"><ActivityTab /></TabsContent>
+                <TabsContent value="audit" className="m-0 p-4">
+                  {canViewAudit ? (
+                    <AuditLogView canExport={canExportReports} />
+                  ) : (
+                    <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-amber-700 dark:text-amber-400">
+                      Your role does not include the View Audit Logs permission.
+                    </div>
+                  )}
+                </TabsContent>
               </ScrollArea>
             </Tabs>
           </div>
@@ -273,7 +288,7 @@ function DashboardTab() {
 
 // ---------- Users ----------
 
-function UsersTab({ canManage, viewerRole }: { canManage: boolean; viewerRole: ErapRole }) {
+function UsersTab({ canManage, viewerRole, viewerName }: { canManage: boolean; viewerRole: ErapRole; viewerName: string }) {
   const [q, setQ] = useState("");
   const [fRole, setFRole] = useState("all");
   const [fBranch, setFBranch] = useState("all");
@@ -281,6 +296,53 @@ function UsersTab({ canManage, viewerRole }: { canManage: boolean; viewerRole: E
   const [fStatus, setFStatus] = useState("all");
   const [detail, setDetail] = useState<AppUser | null>(null);
   const [assign, setAssign] = useState<AppUser | null>(null);
+  const [mfaMap, setMfaMap] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(USERS.map((u) => [u.id, u.mfa])),
+  );
+
+  const audit = (
+    action: string,
+    u: AppUser,
+    status: "success" | "denied" | "info" = "success",
+    details?: string,
+    category: "user" | "role" | "mfa" = "user",
+  ) =>
+    logAudit({
+      actor: viewerName,
+      actorRole: viewerRole,
+      category,
+      action,
+      target: u.fullName,
+      targetId: u.id,
+      status,
+      details,
+    });
+
+  const guarded = (u: AppUser, action: string, fn: () => void) => {
+    if (!canManage) {
+      audit(action, u, "denied", "Role lacks Manage Users permission");
+      toast.error("Your role can't perform this action");
+      return;
+    }
+    fn();
+  };
+
+  const openDetail = (u: AppUser) => {
+    setDetail(u);
+    audit("view_user", u, "info", "Opened profile");
+  };
+
+  const toggleMfa = (u: AppUser, next: boolean) => {
+    setMfaMap((m) => ({ ...m, [u.id]: next }));
+    audit(
+      next ? "mfa_enabled" : "mfa_disabled",
+      u,
+      "success",
+      "Placeholder toggle — enrollment ships in a future release",
+      "mfa",
+    );
+    toast.success(next ? `MFA marked required for ${u.fullName}` : `MFA requirement removed for ${u.fullName}`);
+  };
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -361,7 +423,7 @@ function UsersTab({ canManage, viewerRole }: { canManage: boolean; viewerRole: E
           </TableHeader>
           <TableBody>
             {filtered.map((u) => (
-              <TableRow key={u.id} className="cursor-pointer" onClick={() => setDetail(u)}>
+              <TableRow key={u.id} className="cursor-pointer" onClick={() => openDetail(u)}>
                 <TableCell><UserAvatar name={u.fullName} online={u.online} /></TableCell>
                 <TableCell className="font-medium">{u.fullName}</TableCell>
                 <TableCell className="font-mono text-xs text-muted-foreground">{u.username}</TableCell>
@@ -373,11 +435,11 @@ function UsersTab({ canManage, viewerRole }: { canManage: boolean; viewerRole: E
                 <TableCell><StatusBadge status={u.status} /></TableCell>
                 <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                   <div className="flex justify-end gap-1">
-                    <IconBtn label="View" onClick={() => setDetail(u)}><Eye className="h-4 w-4" /></IconBtn>
-                    <IconBtn label={canManage ? "Edit" : "Requires Manage Users"} disabled={!canManage} onClick={() => setAssign(u)}><UserCog className="h-4 w-4" /></IconBtn>
-                    <IconBtn label={canManage ? "Reset Password" : "Requires Manage Users"} disabled={!canManage} onClick={() => toast.success(`Password reset link sent to ${u.email}`)}><KeyRound className="h-4 w-4" /></IconBtn>
-                    <IconBtn label={canManage ? "Disable" : "Requires Manage Users"} disabled={!canManage || u.status === "disabled"} onClick={() => toast.success(`${u.fullName} disabled`)}><UserX className="h-4 w-4" /></IconBtn>
-                    <IconBtn label={canManage ? "Unlock" : "Requires Manage Users"} disabled={!canManage || u.status !== "locked"} onClick={() => toast.success(`${u.fullName} unlocked`)}><Unlock className="h-4 w-4" /></IconBtn>
+                    <IconBtn label="View" onClick={() => openDetail(u)}><Eye className="h-4 w-4" /></IconBtn>
+                    <IconBtn label={canManage ? "Edit" : "Requires Manage Users"} disabled={!canManage} onClick={() => guarded(u, "edit_user", () => setAssign(u))}><UserCog className="h-4 w-4" /></IconBtn>
+                    <IconBtn label={canManage ? "Reset Password" : "Requires Manage Users"} disabled={!canManage} onClick={() => guarded(u, "reset_password", () => { audit("reset_password", u, "success", `Reset link sent to ${u.email}`); toast.success(`Password reset link sent to ${u.email}`); })}><KeyRound className="h-4 w-4" /></IconBtn>
+                    <IconBtn label={canManage ? "Disable" : "Requires Manage Users"} disabled={!canManage || u.status === "disabled"} onClick={() => guarded(u, "disable_account", () => { audit("disable_account", u); toast.success(`${u.fullName} disabled`); })}><UserX className="h-4 w-4" /></IconBtn>
+                    <IconBtn label={canManage ? "Unlock" : "Requires Manage Users"} disabled={!canManage || u.status !== "locked"} onClick={() => guarded(u, "unlock_account", () => { audit("unlock_account", u); toast.success(`${u.fullName} unlocked`); })}><Unlock className="h-4 w-4" /></IconBtn>
                   </div>
                 </TableCell>
               </TableRow>
@@ -389,8 +451,23 @@ function UsersTab({ canManage, viewerRole }: { canManage: boolean; viewerRole: E
         </Table>
       </div>
 
-      <UserDetailSheet user={detail} onClose={() => setDetail(null)} onEdit={(u) => { setDetail(null); setAssign(u); }} canManage={canManage} />
-      <AssignRoleDialog user={assign} onClose={() => setAssign(null)} viewerRole={viewerRole} />
+      <UserDetailSheet
+        user={detail}
+        onClose={() => setDetail(null)}
+        onEdit={(u) => { setDetail(null); setAssign(u); }}
+        canManage={canManage}
+        mfaEnabled={detail ? mfaMap[detail.id] ?? detail.mfa : false}
+        onToggleMfa={(next) => detail && toggleMfa(detail, next)}
+        onReset={(u) => guarded(u, "reset_password", () => { audit("reset_password", u, "success", `Reset link sent to ${u.email}`); toast.success(`Password reset link sent to ${u.email}`); })}
+        onDisable={(u) => guarded(u, "disable_account", () => { audit("disable_account", u); toast.success(`${u.fullName} disabled`); })}
+        onUnlock={(u) => guarded(u, "unlock_account", () => { audit("unlock_account", u); toast.success(`${u.fullName} unlocked`); })}
+      />
+      <AssignRoleDialog
+        user={assign}
+        onClose={() => setAssign(null)}
+        viewerRole={viewerRole}
+        viewerName={viewerName}
+      />
     </div>
   );
 }
