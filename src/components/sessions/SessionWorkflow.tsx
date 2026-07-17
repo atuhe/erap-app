@@ -19,9 +19,13 @@ import { toast } from "sonner";
 import { ErapRole, ROLE_LABELS, hasPermission } from "@/lib/erap-roles";
 import { logAudit } from "@/lib/audit-log";
 import {
-  createSession, endSession, formatDuration, formatTime, updateSession,
+  createSession, endSession, formatDuration, formatTime, updateSession, appendSessionEvent,
   type SessionRecord,
 } from "@/lib/sessions";
+import { evaluateUnattendedPolicy, type UnattendedPolicyDecision } from "@/lib/unattended-policy";
+import { startRustDeskSession, stopRustDeskSession, sendApprovalDecision, type HandshakeStep } from "@/lib/rustdesk";
+import { ChatPanel } from "./ChatPanel";
+import { FileTransferPanel } from "./FileTransferPanel";
 
 export interface ConnectTarget {
   id: string;
@@ -67,8 +71,17 @@ export function SessionWorkflow({ open, onOpenChange, device, role, actor, onVie
   const [session, setSession] = useState<SessionRecord | null>(null);
   const [errorKind, setErrorKind] = useState<ConnectError | null>(null);
   const [showRemotePopup, setShowRemotePopup] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [filesOpen, setFilesOpen] = useState(false);
+  const [brokerId, setBrokerId] = useState<string | null>(null);
+  const [handshakeStep, setHandshakeStep] = useState<HandshakeStep | null>(null);
 
-  const canUnattended = hasPermission(role, "manage_policies") || role === "system_admin";
+  const policy: UnattendedPolicyDecision | null = device
+    ? evaluateUnattendedPolicy({
+        role, branch: device.branch, department: device.department, deviceStatus: device.status,
+      })
+    : null;
+  const canUnattended = policy?.allowed ?? false;
 
   // Reset when re-opened on a new device
   useEffect(() => {
@@ -79,6 +92,10 @@ export function SessionWorkflow({ open, onOpenChange, device, role, actor, onVie
       setSession(null);
       setErrorKind(null);
       setShowRemotePopup(false);
+      setChatOpen(false);
+      setFilesOpen(false);
+      setBrokerId(null);
+      setHandshakeStep(null);
     }
   }, [open, device?.id]);
 
@@ -97,7 +114,10 @@ export function SessionWorkflow({ open, onOpenChange, device, role, actor, onVie
   const failWith = (kind: ConnectError, msg: string) => {
     setErrorKind(kind);
     setPhase("error");
-    if (session) endSession(session.id, "Failed", msg);
+    if (session) {
+      appendSessionEvent(session.id, { kind: "error", message: msg });
+      endSession(session.id, "Failed", msg);
+    }
     log("connect_failed", "denied", msg);
   };
 
@@ -114,36 +134,65 @@ export function SessionWorkflow({ open, onOpenChange, device, role, actor, onVie
       failWith("permission_denied", "Role lacks Remote Desktop");
       return;
     }
+    if (mode === "unattended" && policy && !policy.allowed) {
+      failWith("permission_denied", `Unattended blocked by policy ${policy.policyName}: ${policy.reason}`);
+      return;
+    }
     const created = createSession({
       technician: actor, technicianRole: role,
       deviceId: device.id, hostname: device.hostname, currentUser: device.currentUser,
       branch: device.branch, department: device.department,
       reason: reason.trim(), mode,
+      deviceSnapshot: device,
     });
     setSession(created);
-    log("connect_attempt", "success", `Reason: ${reason.trim()} · Mode: ${mode}`);
+    log("connect_attempt", "success", `Reason: ${reason.trim()} · Mode: ${mode}${mode === "unattended" && policy ? ` · Policy ${policy.policyName}` : ""}`);
     setPhase("progress");
   };
 
-  // Progress → waiting/active auto-advance
+  // Progress → waiting/active via simulated RustDesk broker
   useEffect(() => {
     if (phase !== "progress" || !session) return;
-    const t = setTimeout(() => {
+    let cancelled = false;
+    (async () => {
+      const res = await startRustDeskSession(device, {
+        onStep: (step) => {
+          if (cancelled) return;
+          setHandshakeStep(step);
+          const map: Record<HandshakeStep, { kind: Parameters<typeof appendSessionEvent>[1]["kind"]; msg: string }> = {
+            permission_verified: { kind: "permission_verified", message: "Technician permissions verified by ERAP" } as never,
+            agent_ok: { kind: "agent_ok", message: "ERAP Agent responded on private WAN" } as never,
+            request_sent: { kind: "info", message: "Connection request delivered to endpoint" } as never,
+          };
+          const m = map[step];
+          appendSessionEvent(session.id, { kind: m.kind as never, message: m.msg as never });
+        },
+      });
+      if (cancelled) return;
+      if (!res.ok) {
+        failWith(res.error ?? "connection_timeout", `Broker rejected handshake (${res.error})`);
+        return;
+      }
+      setBrokerId(res.brokerId);
+      appendSessionEvent(session.id, { kind: "info", message: `RustDesk broker ${res.brokerId} · ${res.latencyMs}ms` });
       if (mode === "unattended") {
         updateSession(session.id, { status: "connected" });
+        appendSessionEvent(session.id, { kind: "connected", message: `Unattended tunnel opened (policy ${policy?.policyName ?? "N/A"})` });
         log("connect", "success", "Unattended connection");
         setPhase("active");
       } else {
         updateSession(session.id, { status: "awaiting_approval" });
+        appendSessionEvent(session.id, { kind: "approval_requested", message: "Awaiting remote user approval" });
         setPhase("waiting");
         setShowRemotePopup(true);
       }
-    }, 2200);
-    return () => clearTimeout(t);
+    })();
+    return () => { cancelled = true; };
   }, [phase, session?.id]);
 
   const cancel = () => {
     if (session) {
+      if (brokerId) void stopRustDeskSession(brokerId, "user");
       endSession(session.id, "Cancelled");
       log("connect_cancelled", "info");
     }
@@ -157,12 +206,12 @@ export function SessionWorkflow({ open, onOpenChange, device, role, actor, onVie
           {phase === "confirm" && (
             <ConfirmScreen
               device={device} reason={reason} setReason={setReason}
-              mode={mode} setMode={setMode} canUnattended={canUnattended}
+              mode={mode} setMode={setMode} canUnattended={canUnattended} policy={policy}
               onCancel={() => onOpenChange(false)} onConnect={startConnect}
             />
           )}
           {phase === "progress" && (
-            <ProgressScreen device={device} onCancel={cancel} />
+            <ProgressScreen device={device} onCancel={cancel} handshakeStep={handshakeStep} brokerId={brokerId} />
           )}
           {phase === "waiting" && session && (
             <WaitingScreen
@@ -170,20 +219,27 @@ export function SessionWorkflow({ open, onOpenChange, device, role, actor, onVie
               onCancel={cancel}
               onRetry={() => {
                 log("approval_retry", "info");
+                appendSessionEvent(session.id, { kind: "info", message: "Approval request re-sent" });
                 setShowRemotePopup(false);
                 setTimeout(() => setShowRemotePopup(true), 200);
               }}
-              onApproved={() => {
+              onApproved={async () => {
+                if (brokerId) await sendApprovalDecision(brokerId, "approved");
                 updateSession(session.id, { status: "connected" });
+                appendSessionEvent(session.id, { kind: "approved", message: "Remote user approved" });
+                appendSessionEvent(session.id, { kind: "connected", message: "RustDesk tunnel established" });
                 log("connect", "success", "User approved");
                 setShowRemotePopup(false);
                 setPhase("active");
               }}
-              onDeclined={() => {
+              onDeclined={async () => {
+                if (brokerId) await sendApprovalDecision(brokerId, "declined");
                 setShowRemotePopup(false);
+                appendSessionEvent(session.id, { kind: "declined", message: "Remote user declined" });
                 failWith("user_declined", "Remote user declined");
               }}
-              onTimeout={() => {
+              onTimeout={async () => {
+                if (brokerId) await sendApprovalDecision(brokerId, "expired");
                 setShowRemotePopup(false);
                 failWith("connection_timeout", "Approval request timed out");
               }}
@@ -191,8 +247,11 @@ export function SessionWorkflow({ open, onOpenChange, device, role, actor, onVie
           )}
           {phase === "active" && session && (
             <ActiveScreen
-              device={device} session={session}
-              onEnd={() => {
+              device={device} session={session} role={role}
+              onOpenChat={() => setChatOpen(true)}
+              onOpenFiles={() => setFilesOpen(true)}
+              onEnd={async () => {
+                if (brokerId) await stopRustDeskSession(brokerId, "user");
                 endSession(session.id, "Completed");
                 log("session_ended", "info");
                 setPhase("summary");
@@ -223,21 +282,44 @@ export function SessionWorkflow({ open, onOpenChange, device, role, actor, onVie
         technician={actor}
         technicianRole={role}
         reason={reason}
-        onAccept={() => {
+        onAccept={async () => {
           if (!session) return;
+          if (brokerId) await sendApprovalDecision(brokerId, "approved");
           updateSession(session.id, { status: "connected" });
+          appendSessionEvent(session.id, { kind: "approved", message: "Remote user approved" });
+          appendSessionEvent(session.id, { kind: "connected", message: "RustDesk tunnel established" });
           log("connect", "success", "User approved");
           setShowRemotePopup(false);
           setPhase("active");
         }}
-        onDecline={() => {
+        onDecline={async () => {
+          if (brokerId) await sendApprovalDecision(brokerId, "declined");
           setShowRemotePopup(false);
           failWith("user_declined", "Remote user declined");
         }}
-        onExpire={() => {
+        onExpire={async () => {
+          if (brokerId) await sendApprovalDecision(brokerId, "expired");
           setShowRemotePopup(false);
           failWith("connection_timeout", "Approval request timed out");
         }}
+      />
+
+      <ChatPanel
+        open={chatOpen}
+        onOpenChange={setChatOpen}
+        sessionId={session?.id ?? null}
+        hostname={device.hostname}
+        currentUser={device.currentUser}
+        actor={actor}
+        role={role}
+      />
+      <FileTransferPanel
+        open={filesOpen}
+        onOpenChange={setFilesOpen}
+        sessionId={session?.id ?? null}
+        hostname={device.hostname}
+        actor={actor}
+        role={role}
       />
     </>
   );
@@ -245,7 +327,7 @@ export function SessionWorkflow({ open, onOpenChange, device, role, actor, onVie
 
 // ─── Screen 1: Confirm ─────────────────────────────────────────────────────
 function ConfirmScreen({
-  device, reason, setReason, mode, setMode, canUnattended, onCancel, onConnect,
+  device, reason, setReason, mode, setMode, canUnattended, policy, onCancel, onConnect,
 }: {
   device: ConnectTarget;
   reason: string;
@@ -253,6 +335,7 @@ function ConfirmScreen({
   mode: "approval" | "unattended";
   setMode: (v: "approval" | "unattended") => void;
   canUnattended: boolean;
+  policy: UnattendedPolicyDecision | null;
   onCancel: () => void;
   onConnect: () => void;
 }) {
@@ -319,11 +402,26 @@ function ConfirmScreen({
             title="Unattended connection"
             desc={
               canUnattended
-                ? "Skip approval — allowed by your role and endpoint policy."
-                : "Restricted to administrators with Manage Policies."
+                ? `Skip approval — allowed by policy ${policy?.policyName ?? ""}.`
+                : policy?.reason ?? "Restricted by policy."
             }
           />
         </RadioGroup>
+        {policy && (
+          <div className={cn(
+            "flex items-start gap-2 rounded-md border p-2 text-[11px]",
+            canUnattended
+              ? "border-emerald-500/40 bg-emerald-500/5 text-emerald-800 dark:text-emerald-300"
+              : "border-amber-500/40 bg-amber-500/5 text-amber-800 dark:text-amber-300",
+          )}>
+            <ShieldCheck className="mt-0.5 h-3.5 w-3.5" />
+            <div>
+              <div className="font-semibold">Unattended access policy · {policy.policyName}</div>
+              <div className="mt-0.5">{policy.rolloutNotes}</div>
+              <div className="mt-1 opacity-80">Audit: every unattended request is logged with the policy name and your role for compliance review.</div>
+            </div>
+          </div>
+        )}
       </div>
 
       <DialogFooter>
@@ -356,23 +454,22 @@ function ModeCard({
 }
 
 // ─── Screen 2: Progress ────────────────────────────────────────────────────
-function ProgressScreen({ device, onCancel }: { device: ConnectTarget; onCancel: () => void }) {
+function ProgressScreen({ device, onCancel, handshakeStep, brokerId }: { device: ConnectTarget; onCancel: () => void; handshakeStep: HandshakeStep | null; brokerId: string | null }) {
   const start = useRef(Date.now());
-  const [step, setStep] = useState(0);
   const [, force] = useState(0);
-  const steps = [
-    { label: "Verifying technician permissions", Icon: ShieldCheck },
-    { label: "Confirming ERAP Agent is online",  Icon: Wifi },
-    { label: "Sending connection request",       Icon: Send },
+  const steps: { key: HandshakeStep; label: string; Icon: React.ComponentType<{ className?: string }> }[] = [
+    { key: "permission_verified", label: "Verifying technician permissions", Icon: ShieldCheck },
+    { key: "agent_ok",            label: "Confirming ERAP Agent is online",   Icon: Wifi },
+    { key: "request_sent",        label: "Sending connection request",        Icon: Send },
   ];
+  const stepIdx = handshakeStep ? steps.findIndex((s) => s.key === handshakeStep) : -1;
+  const step = Math.max(0, stepIdx);
   useEffect(() => {
-    const t1 = setTimeout(() => setStep(1), 700);
-    const t2 = setTimeout(() => setStep(2), 1400);
     const tick = setInterval(() => force((n) => n + 1), 250);
-    return () => { clearTimeout(t1); clearTimeout(t2); clearInterval(tick); };
+    return () => clearInterval(tick);
   }, []);
   const elapsed = Math.max(0, Math.floor((Date.now() - start.current) / 1000));
-  const pct = Math.min(100, ((step + 1) / steps.length) * 100);
+  const pct = Math.min(100, ((stepIdx + 1) / steps.length) * 100);
   return (
     <>
       <DialogHeader>
@@ -399,7 +496,7 @@ function ProgressScreen({ device, onCancel }: { device: ConnectTarget; onCancel:
       </ol>
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> Elapsed {elapsed}s</span>
-        <span>Target · {device.ip}:{device.rustDeskPort}</span>
+        <span>{brokerId ? `Broker ${brokerId}` : `Target · ${device.ip}:${device.rustDeskPort}`}</span>
       </div>
       <DialogFooter>
         <Button variant="outline" onClick={onCancel}>Cancel request</Button>
@@ -463,14 +560,16 @@ function WaitingScreen({
 
 // ─── Screen 5: Active session ──────────────────────────────────────────────
 function ActiveScreen({
-  device, session, onEnd,
-}: { device: ConnectTarget; session: SessionRecord; onEnd: () => void }) {
+  device, session, role, onEnd, onOpenChat, onOpenFiles,
+}: { device: ConnectTarget; session: SessionRecord; role: ErapRole; onEnd: () => void; onOpenChat: () => void; onOpenFiles: () => void }) {
   const [, force] = useState(0);
   useEffect(() => {
     const i = setInterval(() => force((n) => n + 1), 1000);
     return () => clearInterval(i);
   }, []);
   const dur = formatDuration(Date.now() - session.startedAt);
+  const canChat = hasPermission(role, "chat");
+  const canFiles = hasPermission(role, "file_transfer");
   return (
     <>
       <DialogHeader>
@@ -505,8 +604,8 @@ function ActiveScreen({
       </div>
       <div className="grid grid-cols-2 gap-2">
         <QuickAction icon={PlugZap} label="Reconnect" onClick={() => toast.info("Reconnect requested via RustDesk broker") } />
-        <QuickAction icon={FolderUp} label="Transfer file" onClick={() => toast.info("Opening file transfer channel…") } />
-        <QuickAction icon={MessageSquare} label="Open chat" onClick={() => toast.info("Chat channel opened") } />
+        <QuickAction icon={FolderUp} label="Transfer file" onClick={onOpenFiles} disabled={!canFiles} title={canFiles ? undefined : "Requires File Transfer permission"} />
+        <QuickAction icon={MessageSquare} label="Open chat" onClick={onOpenChat} disabled={!canChat} title={canChat ? undefined : "Requires Chat permission"} />
         <QuickAction icon={Monitor} label="Device details" onClick={() => toast.info("Opening device details…") } />
       </div>
       <div className="flex items-start gap-2 rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
@@ -520,9 +619,9 @@ function ActiveScreen({
   );
 }
 
-function QuickAction({ icon: Icon, label, onClick }: { icon: React.ComponentType<{ className?: string }>; label: string; onClick: () => void }) {
+function QuickAction({ icon: Icon, label, onClick, disabled, title }: { icon: React.ComponentType<{ className?: string }>; label: string; onClick: () => void; disabled?: boolean; title?: string }) {
   return (
-    <Button variant="outline" onClick={onClick} className="justify-start">
+    <Button variant="outline" onClick={onClick} disabled={disabled} title={title} className="justify-start">
       <Icon className="mr-2 h-4 w-4" /> {label}
     </Button>
   );
