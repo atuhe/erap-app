@@ -36,11 +36,13 @@ import {
 } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { ErapRole, ROLE_LABELS, hasPermission, Permission } from "@/lib/erap-roles";
+import { logAudit } from "@/lib/audit-log";
 
 type Status = "online" | "offline";
-type Role = "admin" | "operator" | "viewer";
 
 interface Device {
   id: string;
@@ -68,11 +70,12 @@ const DEVICES: Device[] = [
   { id: "DEV-10250", hostname: "TOK-DES-MB03", currentUser: "h.sato", branch: "Tokyo", department: "Design", status: "online", lastSeen: "just now", os: "Windows 11 Pro 23H2", ip: "10.88.2.31", rustDeskPort: 21118 },
 ];
 
-const NAV = [
+const NAV: { key: string; label: string; icon: typeof LayoutDashboard; perm?: Permission }[] = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { key: "devices", label: "Devices", icon: MonitorSmartphone },
-  { key: "sessions", label: "Sessions", icon: Radio },
+  { key: "devices", label: "Devices", icon: MonitorSmartphone, perm: "view_devices" },
+  { key: "sessions", label: "Sessions", icon: Radio, perm: "remote_desktop" },
   { key: "history", label: "My History", icon: History },
+  { key: "reports", label: "Reports", icon: ClipboardList, perm: "view_reports" },
   { key: "settings", label: "Settings", icon: SettingsIcon },
 ];
 
@@ -80,7 +83,7 @@ const UNIQUE = <K extends keyof Device>(k: K) => Array.from(new Set(DEVICES.map(
 
 export function DeviceManagement() {
   const [active, setActive] = useState("devices");
-  const [role, setRole] = useState<Role>("admin");
+  const [role, setRole] = useState<ErapRole>("system_admin");
   const [q, setQ] = useState("");
   const [branch, setBranch] = useState("all");
   const [department, setDepartment] = useState("all");
@@ -105,16 +108,93 @@ export function DeviceManagement() {
   }, [q, branch, department, status, os]);
 
   const selected = filtered.find((d) => d.id === selectedId) ?? DEVICES.find((d) => d.id === selectedId) ?? null;
+  const viewerName = "Alex Morgan";
 
   const can = {
-    connect: role === "admin" || role === "operator",
-    history: true,
-    restart: role === "admin",
-    shutdown: role === "admin",
-    copyIp: true,
+    connect: hasPermission(role, "remote_desktop"),
+    history: hasPermission(role, "view_audit") || hasPermission(role, "view_devices"),
+    restart: hasPermission(role, "restart"),
+    shutdown: hasPermission(role, "shutdown"),
+    copyIp: hasPermission(role, "view_devices"),
+    reports: hasPermission(role, "view_reports"),
+  };
+
+  const logDevice = (
+    action: string,
+    d: { id: string; hostname: string },
+    status: "success" | "denied" | "info",
+    details?: string,
+    category: "session" | "device" | "report" = "session",
+  ) =>
+    logAudit({
+      actor: viewerName,
+      actorRole: role,
+      category,
+      action,
+      target: d.hostname,
+      targetId: d.id,
+      status,
+      details,
+    });
+
+  const doConnect = (d: { id: string; hostname: string; status: Status }) => {
+    if (!can.connect) {
+      logDevice("connect_attempt", d, "denied", "Role lacks Remote Desktop");
+      toast.error("Your role can't start remote sessions");
+      return;
+    }
+    if (d.status === "offline") {
+      logDevice("connect_attempt", d, "denied", "Device offline");
+      return;
+    }
+    logDevice("connect", d, "success");
+    toast.success(`Connecting to ${d.hostname}…`);
+  };
+  const doRestart = (d: { id: string; hostname: string }) => {
+    if (!can.restart) {
+      logDevice("restart_device", d, "denied", "Role lacks Restart Device");
+      toast.error("Your role can't restart this device");
+      return;
+    }
+    logDevice("restart_device", d, "success");
+    toast.success(`Restart sent to ${d.hostname}`);
+  };
+  const doShutdown = (d: { id: string; hostname: string }) => {
+    if (!can.shutdown) {
+      logDevice("shutdown_device", d, "denied", "Role lacks Shutdown Device");
+      toast.error("Your role can't shut down this device");
+      return;
+    }
+    logDevice("shutdown_device", d, "success");
+    toast.success(`Shutdown sent to ${d.hostname}`);
+  };
+  const doCopyIp = (d: { id: string; hostname: string; ip: string }) => {
+    navigator.clipboard?.writeText(d.ip);
+    logDevice("copy_ip", d, "info", d.ip, "device");
+    toast.success(`Copied ${d.ip}`);
+  };
+
+  const onNavClick = (n: { key: string; label: string; perm?: Permission }) => {
+    if (n.perm && !hasPermission(role, n.perm)) {
+      logAudit({
+        actor: viewerName,
+        actorRole: role,
+        category: n.key === "reports" ? "report" : n.key === "sessions" ? "session" : "device",
+        action: "access_denied",
+        target: n.label,
+        status: "denied",
+        details: `Missing ${n.perm} permission`,
+      });
+      toast.error(`Your role can't open ${n.label}`);
+      return;
+    }
+    setActive(n.key);
+    if (n.key === "sessions") logAudit({ actor: viewerName, actorRole: role, category: "session", action: "view_sessions", status: "info" });
+    if (n.key === "reports") logAudit({ actor: viewerName, actorRole: role, category: "report", action: "view_report", status: "info" });
   };
 
   return (
+   <TooltipProvider delayDuration={200}>
     <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
       {/* Sidebar */}
       <aside className="hidden w-60 flex-col bg-sidebar text-sidebar-foreground md:flex">
@@ -131,21 +211,30 @@ export function DeviceManagement() {
           {NAV.map((n) => {
             const Icon = n.icon;
             const isActive = active === n.key;
-            return (
+            const disabled = !!n.perm && !hasPermission(role, n.perm);
+            const btn = (
               <button
                 key={n.key}
-                onClick={() => setActive(n.key)}
+                onClick={() => onNavClick(n)}
                 className={cn(
                   "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
                   isActive
                     ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                    : disabled
+                      ? "cursor-not-allowed text-sidebar-foreground/40"
+                      : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                 )}
               >
                 <Icon className="h-4 w-4" />
                 {n.label}
               </button>
             );
+            return disabled ? (
+              <Tooltip key={n.key}>
+                <TooltipTrigger asChild><span>{btn}</span></TooltipTrigger>
+                <TooltipContent side="right">Requires {n.perm} permission</TooltipContent>
+              </Tooltip>
+            ) : btn;
           })}
         </nav>
         <div className="border-t border-sidebar-border p-3 text-xs text-sidebar-foreground/60">
@@ -171,14 +260,14 @@ export function DeviceManagement() {
             />
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <Select value={role} onValueChange={(v) => setRole(v as Role)}>
-              <SelectTrigger className="h-9 w-[140px]">
+            <Select value={role} onValueChange={(v) => setRole(v as ErapRole)}>
+              <SelectTrigger className="h-9 w-[200px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="admin">Role: Admin</SelectItem>
-                <SelectItem value="operator">Role: Operator</SelectItem>
-                <SelectItem value="viewer">Role: Viewer</SelectItem>
+                {(Object.keys(ROLE_LABELS) as ErapRole[]).map((r) => (
+                  <SelectItem key={r} value={r}>Role: {ROLE_LABELS[r]}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Button variant="ghost" size="icon" aria-label="Notifications">
@@ -247,16 +336,25 @@ export function DeviceManagement() {
                           </TableCell>
                           <TableCell className="text-muted-foreground">{d.lastSeen}</TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              size="sm"
-                              disabled={!can.connect || d.status === "offline"}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toast.success(`Connecting to ${d.hostname}…`);
-                              }}
-                            >
-                              Connect
-                            </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span>
+                                  <Button
+                                    size="sm"
+                                    disabled={!can.connect || d.status === "offline"}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      doConnect(d);
+                                    }}
+                                  >
+                                    Connect
+                                  </Button>
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {!can.connect ? "Role lacks Remote Desktop permission" : d.status === "offline" ? "Device offline" : "Start remote session"}
+                              </TooltipContent>
+                            </Tooltip>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -292,39 +390,46 @@ export function DeviceManagement() {
               </div>
 
               <div className="grid grid-cols-2 gap-2 p-4">
-                <Button
+                <GuardedButton
                   className="col-span-2"
                   disabled={!can.connect || selected.status === "offline"}
-                  onClick={() => toast.success(`Connecting to ${selected.hostname}…`)}
+                  tip={!can.connect ? "Role lacks Remote Desktop permission" : selected.status === "offline" ? "Device offline" : "Start remote session"}
+                  onClick={() => doConnect(selected)}
                 >
                   <Plug className="mr-2 h-4 w-4" /> Connect
-                </Button>
-                <Button variant="outline" disabled={!can.history} onClick={() => toast("Opening session history…")}>
+                </GuardedButton>
+                <GuardedButton
+                  variant="outline"
+                  disabled={!can.history}
+                  tip={can.history ? "Show recent sessions" : "Role lacks View Devices"}
+                  onClick={() => { logDevice("view_sessions", selected, "info", undefined, "session"); toast("Opening session history…"); }}
+                >
                   <ClipboardList className="mr-2 h-4 w-4" /> View History
-                </Button>
-                <Button
+                </GuardedButton>
+                <GuardedButton
                   variant="outline"
                   disabled={!can.restart || selected.status === "offline"}
-                  onClick={() => toast.success(`Restart sent to ${selected.hostname}`)}
+                  tip={!can.restart ? "Role lacks Restart Device" : selected.status === "offline" ? "Device offline" : "Restart the endpoint"}
+                  onClick={() => doRestart(selected)}
                 >
                   <RotateCw className="mr-2 h-4 w-4" /> Restart
-                </Button>
-                <Button
+                </GuardedButton>
+                <GuardedButton
                   variant="outline"
                   disabled={!can.shutdown || selected.status === "offline"}
-                  onClick={() => toast.success(`Shutdown sent to ${selected.hostname}`)}
+                  tip={!can.shutdown ? "Role lacks Shutdown Device" : selected.status === "offline" ? "Device offline" : "Shut the endpoint down"}
+                  onClick={() => doShutdown(selected)}
                 >
                   <Power className="mr-2 h-4 w-4" /> Shutdown
-                </Button>
-                <Button
+                </GuardedButton>
+                <GuardedButton
                   variant="outline"
-                  onClick={() => {
-                    navigator.clipboard?.writeText(selected.ip);
-                    toast.success(`Copied ${selected.ip}`);
-                  }}
+                  disabled={!can.copyIp}
+                  tip={can.copyIp ? "Copy IP to clipboard" : "Role lacks View Devices"}
+                  onClick={() => doCopyIp(selected)}
                 >
                   <Copy className="mr-2 h-4 w-4" /> Copy IP
-                </Button>
+                </GuardedButton>
               </div>
 
               <Separator />
@@ -360,6 +465,36 @@ export function DeviceManagement() {
         </div>
       </div>
     </div>
+   </TooltipProvider>
+  );
+}
+
+function GuardedButton({
+  children, disabled, onClick, tip, variant, className,
+}: {
+  children: React.ReactNode;
+  disabled?: boolean;
+  onClick: () => void;
+  tip: string;
+  variant?: "outline";
+  className?: string;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className={className}>
+          <Button
+            variant={variant}
+            disabled={disabled}
+            onClick={onClick}
+            className={cn(className, "w-full")}
+          >
+            {children}
+          </Button>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{tip}</TooltipContent>
+    </Tooltip>
   );
 }
 
