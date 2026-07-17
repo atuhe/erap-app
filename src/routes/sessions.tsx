@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { SessionsModule } from "@/components/sessions/SessionsModule";
+import { AppShell } from "@/components/shell/AppShell";
 
 export const Route = createFileRoute("/sessions")({
   head: () => ({
@@ -10,5 +11,9 @@ export const Route = createFileRoute("/sessions")({
       { property: "og:description", content: "Live remote sessions, technician history, and administrator oversight for the private-WAN remote support platform." },
     ],
   }),
-  component: () => <SessionsModule />,
+  component: () => (
+    <AppShell>
+      <SessionsModule />
+    </AppShell>
+  ),
 });
