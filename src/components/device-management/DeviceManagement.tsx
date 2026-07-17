@@ -468,11 +468,18 @@ export function DeviceManagement() {
         </div>
       </div>
     </div>
+    <SessionWorkflow
+      open={!!connectDevice}
+      onOpenChange={(v) => !v && setConnectDevice(null)}
+      device={connectDevice}
+      role={role}
+      actor={viewerName}
+      onViewHistory={() => navigate({ to: "/sessions" })}
+    />
+    </>
    </TooltipProvider>
     );
 }
-
-function DeviceManagementFooter() { return null; }
 
 function GuardedButton({
   children, disabled, onClick, tip, variant, className,
