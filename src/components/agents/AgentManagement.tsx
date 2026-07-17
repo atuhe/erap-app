@@ -40,6 +40,13 @@ import {
   X,
   ClipboardList,
   ShieldAlert,
+  Trash2,
+  Power,
+  HeartPulse,
+  History,
+  AlertOctagon,
+  Lightbulb,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -113,6 +120,94 @@ const AGENTS: Agent[] = [
 ];
 
 const PENDING_APPROVALS = 4;
+
+// ────────────────────────────────────────────────────────────────────────────
+// Deployment batches with per-device step progress
+// ────────────────────────────────────────────────────────────────────────────
+
+type BatchStepStatus = "pending" | "running" | "success" | "failed" | "skipped";
+
+interface BatchDeviceStep {
+  key: string;
+  label: string;
+  status: BatchStepStatus;
+  detail?: string;
+}
+
+interface BatchDevice {
+  hostname: string;
+  ip: string;
+  status: "queued" | "in_progress" | "completed" | "failed" | "retrying";
+  steps: BatchDeviceStep[];
+}
+
+interface DeploymentBatch {
+  id: string;
+  title: string;
+  when: string;
+  status: "Completed" | "In progress" | "Staged" | "Failed";
+  devices: BatchDevice[];
+}
+
+const BATCH_STEP_TEMPLATE = [
+  "Queued",
+  "Package fetched",
+  "MSI signature verified",
+  "Installer executed",
+  "Post-install checks",
+  "Registered with broker",
+];
+
+function mkSteps(upTo: number, failAt?: number): BatchDeviceStep[] {
+  return BATCH_STEP_TEMPLATE.map((label, i) => {
+    let status: BatchStepStatus = "pending";
+    if (failAt !== undefined && i === failAt) status = "failed";
+    else if (failAt !== undefined && i > failAt) status = "skipped";
+    else if (i < upTo) status = "success";
+    else if (i === upTo) status = "running";
+    return {
+      key: `${i}-${label}`,
+      label,
+      status,
+      detail: status === "failed" ? "MSI exit 1603 — access denied on target" : undefined,
+    };
+  });
+}
+
+const DEPLOYMENT_BATCHES: DeploymentBatch[] = [
+  {
+    id: "BATCH-2148", title: "3.2.1 → New York Finance", when: "Today 09:12", status: "Completed",
+    devices: [
+      { hostname: "NYC-FIN-WS01", ip: "10.24.11.42", status: "completed", steps: mkSteps(6) },
+      { hostname: "NYC-FIN-WS02", ip: "10.24.11.43", status: "completed", steps: mkSteps(6) },
+      { hostname: "NYC-FIN-WS03", ip: "10.24.11.44", status: "completed", steps: mkSteps(6) },
+    ],
+  },
+  {
+    id: "BATCH-2147", title: "3.2.1 → London Support", when: "Today 08:55", status: "In progress",
+    devices: [
+      { hostname: "LON-HR-LT14", ip: "10.44.9.18",   status: "completed",   steps: mkSteps(6) },
+      { hostname: "LON-FIN-LT02", ip: "10.44.9.44",  status: "in_progress", steps: mkSteps(3) },
+      { hostname: "LON-ENG-WS08", ip: "10.44.9.201", status: "in_progress", steps: mkSteps(2) },
+      { hostname: "LON-OPS-WS41", ip: "10.44.9.87",  status: "queued",      steps: mkSteps(0) },
+    ],
+  },
+  {
+    id: "BATCH-2146", title: "3.2.0 Staged → Berlin Eng lab", when: "Yesterday", status: "Failed",
+    devices: [
+      { hostname: "BER-ENG-WS22", ip: "10.61.4.201", status: "completed", steps: mkSteps(6) },
+      { hostname: "BER-HR-WS10",  ip: "10.61.4.115", status: "failed",    steps: mkSteps(0, 3) },
+      { hostname: "BER-ENG-WS23", ip: "10.61.4.202", status: "failed",    steps: mkSteps(0, 2) },
+    ],
+  },
+  {
+    id: "BATCH-2145", title: "Rollback → Tokyo Ops", when: "2 days ago", status: "Completed",
+    devices: [
+      { hostname: "TOK-OPS-WS05", ip: "10.88.2.9",  status: "completed", steps: mkSteps(6) },
+      { hostname: "TOK-DES-MB03", ip: "10.88.2.31", status: "completed", steps: mkSteps(6) },
+    ],
+  },
+];
 
 interface Version {
   version: string;
