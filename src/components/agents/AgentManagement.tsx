@@ -595,6 +595,10 @@ function DashboardTab({
   const [department, setDepartment] = useState("all");
   const [status, setStatus] = useState<string>("all");
   const [version, setVersion] = useState("all");
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
+  const [bulkAction, setBulkAction] = useState<null | "enable" | "disable" | "update" | "remove">(null);
+  const [diagnosticsId, setDiagnosticsId] = useState<string | null>(null);
+  const [openBatch, setOpenBatch] = useState<DeploymentBatch | null>(null);
 
   const branches = useMemo(() => Array.from(new Set(AGENTS.map((a) => a.branch))), []);
   const departments = useMemo(() => Array.from(new Set(AGENTS.map((a) => a.department))), []);
@@ -635,6 +639,48 @@ function DashboardTab({
     else toast.error(`Blocked: ${note ?? "insufficient permissions"}`);
   };
 
+  const selectedAgents = useMemo(
+    () => AGENTS.filter((a) => selectedRows.has(a.id)),
+    [selectedRows],
+  );
+  const allShownSelected = filtered.length > 0 && filtered.every((a) => selectedRows.has(a.id));
+  const someShownSelected = filtered.some((a) => selectedRows.has(a.id));
+
+  const toggleAll = (v: boolean) => {
+    const next = new Set(selectedRows);
+    if (v) filtered.forEach((a) => next.add(a.id));
+    else filtered.forEach((a) => next.delete(a.id));
+    setSelectedRows(next);
+  };
+  const toggleOne = (id: string, v: boolean) => {
+    const next = new Set(selectedRows);
+    if (v) next.add(id); else next.delete(id);
+    setSelectedRows(next);
+  };
+
+  const openBulk = (a: "enable" | "disable" | "update" | "remove") => {
+    if (!canManage) {
+      toast.error("Your role can't perform bulk agent actions");
+      logAudit({ actor: viewerName, actorRole: role, category: "device", action: `bulk_${a}`, status: "denied", details: "Role lacks manage_policies" });
+      return;
+    }
+    if (selectedRows.size === 0) return;
+    setBulkAction(a);
+  };
+
+  const runBulk = (a: "enable" | "disable" | "update" | "remove") => {
+    logAudit({
+      actor: viewerName, actorRole: role, category: "device",
+      action: `bulk_${a}`,
+      target: `${selectedRows.size} devices`,
+      status: "success",
+      details: selectedAgents.map((x) => x.hostname).join(", ").slice(0, 200),
+    });
+    toast.success(`${labelForBulk(a)} queued for ${selectedRows.size} device${selectedRows.size === 1 ? "" : "s"}`);
+    setBulkAction(null);
+    setSelectedRows(new Set());
+  };
+
   return (
     <>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
@@ -669,9 +715,29 @@ function DashboardTab({
       </Card>
 
       <Card className="overflow-hidden">
+        {selectedRows.size > 0 && (
+          <div className="flex flex-wrap items-center gap-2 border-b bg-primary/5 px-4 py-2">
+            <span className="text-sm font-medium">{selectedRows.size} selected</span>
+            <span className="text-xs text-muted-foreground">Bulk actions apply to every selected agent.</span>
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <GuardedBulkButton canManage={canManage} onClick={() => openBulk("enable")} icon={Play} label="Enable" />
+              <GuardedBulkButton canManage={canManage} onClick={() => openBulk("disable")} icon={Power} label="Disable" />
+              <GuardedBulkButton canManage={canManage} onClick={() => openBulk("update")} icon={RefreshCw} label="Push Update" />
+              <GuardedBulkButton canManage={canManage} onClick={() => openBulk("remove")} icon={Trash2} label="Remove" tone="danger" />
+              <Button size="sm" variant="ghost" onClick={() => setSelectedRows(new Set())}>Clear</Button>
+            </div>
+          </div>
+        )}
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40">
+              <TableHead className="w-10">
+                <Checkbox
+                  checked={allShownSelected ? true : someShownSelected ? "indeterminate" : false}
+                  onCheckedChange={(v) => toggleAll(!!v)}
+                  aria-label="Select all shown"
+                />
+              </TableHead>
               <TableHead>Device Name</TableHead>
               <TableHead className="w-[120px]">Device ID</TableHead>
               <TableHead>Branch</TableHead>
@@ -685,8 +751,24 @@ function DashboardTab({
           </TableHeader>
           <TableBody>
             {filtered.map((a) => (
-              <TableRow key={a.id}>
-                <TableCell className="font-medium">{a.hostname}</TableCell>
+              <TableRow
+                key={a.id}
+                data-state={diagnosticsId === a.id ? "selected" : undefined}
+                className="cursor-pointer"
+                onClick={() => setDiagnosticsId(a.id)}
+              >
+                <TableCell onClick={(e) => e.stopPropagation()}>
+                  <Checkbox
+                    checked={selectedRows.has(a.id)}
+                    onCheckedChange={(v) => toggleOne(a.id, !!v)}
+                    aria-label={`Select ${a.hostname}`}
+                  />
+                </TableCell>
+                <TableCell className="font-medium">
+                  <button type="button" className="text-left hover:underline" onClick={(e) => { e.stopPropagation(); setDiagnosticsId(a.id); }}>
+                    {a.hostname}
+                  </button>
+                </TableCell>
                 <TableCell className="font-mono text-xs text-muted-foreground">{a.id}</TableCell>
                 <TableCell>{a.branch}</TableCell>
                 <TableCell>{a.department}</TableCell>
@@ -698,8 +780,16 @@ function DashboardTab({
                 <TableCell className="text-muted-foreground">{a.os}</TableCell>
                 <TableCell className="text-muted-foreground">{a.lastCheckIn}</TableCell>
                 <TableCell><AgentStatusPill status={a.status} /></TableCell>
-                <TableCell className="text-right">
+                <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                   <div className="inline-flex items-center gap-1">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button size="sm" variant="outline" className="h-8 px-2" onClick={() => setDiagnosticsId(a.id)}>
+                          <Activity className="h-3.5 w-3.5" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Diagnostics</TooltipContent>
+                    </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span>
@@ -755,7 +845,7 @@ function DashboardTab({
             ))}
             {filtered.length === 0 && (
               <TableRow>
-                <TableCell colSpan={9} className="h-24 text-center text-sm text-muted-foreground">No agents match the current filters.</TableCell>
+                <TableCell colSpan={10} className="h-24 text-center text-sm text-muted-foreground">No agents match the current filters.</TableCell>
               </TableRow>
             )}
           </TableBody>
@@ -795,20 +885,33 @@ function DashboardTab({
             <CardDescription>Last operations across the private WAN</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
-            {[
-              { id: "BATCH-2148", title: "3.2.1 → New York Finance",       count: 128, status: "Completed",  when: "Today 09:12" },
-              { id: "BATCH-2147", title: "3.2.1 → London Support",         count: 74,  status: "In progress", when: "Today 08:55" },
-              { id: "BATCH-2146", title: "3.2.0 Staged → Berlin Eng lab",  count: 22,  status: "Staged",      when: "Yesterday" },
-              { id: "BATCH-2145", title: "Rollback → Tokyo Ops",           count: 6,   status: "Completed",   when: "2 days ago" },
-            ].map((b) => (
-              <div key={b.id} className="flex items-center justify-between rounded-md border bg-muted/20 px-3 py-2">
-                <div className="min-w-0">
-                  <div className="text-sm font-medium truncate">{b.title}</div>
-                  <div className="text-xs text-muted-foreground">{b.id} · {b.when} · {b.count} devices</div>
-                </div>
-                <Badge variant="outline" className="font-normal">{b.status}</Badge>
-              </div>
-            ))}
+            {DEPLOYMENT_BATCHES.map((b) => {
+              const done = b.devices.filter((d) => d.status === "completed").length;
+              const failed = b.devices.filter((d) => d.status === "failed").length;
+              const pct = Math.round((done / b.devices.length) * 100);
+              return (
+                <button
+                  key={b.id}
+                  type="button"
+                  onClick={() => setOpenBatch(b)}
+                  className="w-full rounded-md border bg-muted/20 px-3 py-2 text-left transition-colors hover:bg-muted/40"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium">{b.title}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {b.id} · {b.when} · {b.devices.length} devices · {done} done{failed ? ` · ${failed} failed` : ""}
+                      </div>
+                    </div>
+                    <BatchStatusPill status={b.status} />
+                  </div>
+                  <div className="mt-2 flex items-center gap-2">
+                    <Progress value={pct} className="h-1.5 flex-1" />
+                    <span className="w-10 text-right font-mono text-xs text-muted-foreground">{pct}%</span>
+                  </div>
+                </button>
+              );
+            })}
             <div className="pt-1">
               <Button variant="outline" size="sm" onClick={() => setWizardOpen(true)} disabled={!canManage}>
                 <Download className="mr-2 h-3.5 w-3.5" /> New deployment
@@ -817,6 +920,23 @@ function DashboardTab({
           </CardContent>
         </Card>
       </div>
+
+      <BulkActionConfirm
+        action={bulkAction}
+        agents={selectedAgents}
+        onCancel={() => setBulkAction(null)}
+        onConfirm={runBulk}
+      />
+      <BatchProgressDialog
+        batch={openBatch}
+        onClose={() => setOpenBatch(null)}
+        role={role}
+        viewerName={viewerName}
+      />
+      <DiagnosticsPanel
+        agent={diagnosticsId ? AGENTS.find((a) => a.id === diagnosticsId) ?? null : null}
+        onClose={() => setDiagnosticsId(null)}
+      />
     </>
   );
 }
