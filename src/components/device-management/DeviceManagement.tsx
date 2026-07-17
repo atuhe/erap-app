@@ -336,16 +336,25 @@ export function DeviceManagement() {
                           </TableCell>
                           <TableCell className="text-muted-foreground">{d.lastSeen}</TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              size="sm"
-                              disabled={!can.connect || d.status === "offline"}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toast.success(`Connecting to ${d.hostname}…`);
-                              }}
-                            >
-                              Connect
-                            </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span>
+                                  <Button
+                                    size="sm"
+                                    disabled={!can.connect || d.status === "offline"}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      doConnect(d);
+                                    }}
+                                  >
+                                    Connect
+                                  </Button>
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {!can.connect ? "Role lacks Remote Desktop permission" : d.status === "offline" ? "Device offline" : "Start remote session"}
+                              </TooltipContent>
+                            </Tooltip>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -381,39 +390,46 @@ export function DeviceManagement() {
               </div>
 
               <div className="grid grid-cols-2 gap-2 p-4">
-                <Button
+                <GuardedButton
                   className="col-span-2"
                   disabled={!can.connect || selected.status === "offline"}
-                  onClick={() => toast.success(`Connecting to ${selected.hostname}…`)}
+                  tip={!can.connect ? "Role lacks Remote Desktop permission" : selected.status === "offline" ? "Device offline" : "Start remote session"}
+                  onClick={() => doConnect(selected)}
                 >
                   <Plug className="mr-2 h-4 w-4" /> Connect
-                </Button>
-                <Button variant="outline" disabled={!can.history} onClick={() => toast("Opening session history…")}>
+                </GuardedButton>
+                <GuardedButton
+                  variant="outline"
+                  disabled={!can.history}
+                  tip={can.history ? "Show recent sessions" : "Role lacks View Devices"}
+                  onClick={() => { logDevice("view_sessions", selected, "info", undefined, "session"); toast("Opening session history…"); }}
+                >
                   <ClipboardList className="mr-2 h-4 w-4" /> View History
-                </Button>
-                <Button
+                </GuardedButton>
+                <GuardedButton
                   variant="outline"
                   disabled={!can.restart || selected.status === "offline"}
-                  onClick={() => toast.success(`Restart sent to ${selected.hostname}`)}
+                  tip={!can.restart ? "Role lacks Restart Device" : selected.status === "offline" ? "Device offline" : "Restart the endpoint"}
+                  onClick={() => doRestart(selected)}
                 >
                   <RotateCw className="mr-2 h-4 w-4" /> Restart
-                </Button>
-                <Button
+                </GuardedButton>
+                <GuardedButton
                   variant="outline"
                   disabled={!can.shutdown || selected.status === "offline"}
-                  onClick={() => toast.success(`Shutdown sent to ${selected.hostname}`)}
+                  tip={!can.shutdown ? "Role lacks Shutdown Device" : selected.status === "offline" ? "Device offline" : "Shut the endpoint down"}
+                  onClick={() => doShutdown(selected)}
                 >
                   <Power className="mr-2 h-4 w-4" /> Shutdown
-                </Button>
-                <Button
+                </GuardedButton>
+                <GuardedButton
                   variant="outline"
-                  onClick={() => {
-                    navigator.clipboard?.writeText(selected.ip);
-                    toast.success(`Copied ${selected.ip}`);
-                  }}
+                  disabled={!can.copyIp}
+                  tip={can.copyIp ? "Copy IP to clipboard" : "Role lacks View Devices"}
+                  onClick={() => doCopyIp(selected)}
                 >
                   <Copy className="mr-2 h-4 w-4" /> Copy IP
-                </Button>
+                </GuardedButton>
               </div>
 
               <Separator />
@@ -449,6 +465,36 @@ export function DeviceManagement() {
         </div>
       </div>
     </div>
+   </TooltipProvider>
+  );
+}
+
+function GuardedButton({
+  children, disabled, onClick, tip, variant, className,
+}: {
+  children: React.ReactNode;
+  disabled?: boolean;
+  onClick: () => void;
+  tip: string;
+  variant?: "outline";
+  className?: string;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className={className}>
+          <Button
+            variant={variant}
+            disabled={disabled}
+            onClick={onClick}
+            className={cn(className, "w-full")}
+          >
+            {children}
+          </Button>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{tip}</TooltipContent>
+    </Tooltip>
   );
 }
 
