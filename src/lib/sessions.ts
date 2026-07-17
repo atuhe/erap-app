@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import type { ErapRole } from "./erap-roles";
+import type { ConnectTarget } from "@/components/sessions/SessionWorkflow";
 
 export type SessionStatus =
   | "requesting"
@@ -10,6 +11,26 @@ export type SessionStatus =
   | "failed";
 
 export type SessionResult = "Completed" | "Cancelled" | "Failed";
+
+export type SessionEventKind =
+  | "request_created"
+  | "permission_verified"
+  | "agent_ok"
+  | "approval_requested"
+  | "approved"
+  | "declined"
+  | "connected"
+  | "disconnected"
+  | "error"
+  | "chat"
+  | "file"
+  | "info";
+
+export interface SessionEvent {
+  ts: number;
+  kind: SessionEventKind;
+  message: string;
+}
 
 export interface SessionRecord {
   id: string;
@@ -27,6 +48,8 @@ export interface SessionRecord {
   status: SessionStatus;
   result?: SessionResult;
   failure?: string;
+  events?: SessionEvent[];
+  deviceSnapshot?: ConnectTarget;
 }
 
 const listeners = new Set<() => void>();
@@ -44,11 +67,31 @@ function mk(
     status === "connected" || status === "awaiting_approval" || status === "requesting"
       ? undefined
       : startedAt + durationMin * 60_000;
+  const events: SessionEvent[] = [
+    { ts: startedAt, kind: "request_created", message: `Requested by ${base.technician}` },
+    { ts: startedAt + 800, kind: "permission_verified", message: "Technician permissions verified" },
+    { ts: startedAt + 1600, kind: "agent_ok", message: "ERAP Agent reachable on private WAN" },
+  ];
+  if (base.mode === "approval") {
+    events.push({ ts: startedAt + 2400, kind: "approval_requested", message: "Approval requested from remote user" });
+    if (status === "cancelled") {
+      events.push({ ts: startedAt + 3200, kind: "declined", message: "Remote user declined the request" });
+    } else {
+      events.push({ ts: startedAt + 3200, kind: "approved", message: "Remote user approved" });
+    }
+  }
+  if (status === "connected" || status === "completed") {
+    events.push({ ts: startedAt + 4000, kind: "connected", message: "RustDesk tunnel established" });
+  }
+  if (endedAt) {
+    events.push({ ts: endedAt, kind: "disconnected", message: `Session ${status}` });
+  }
   return {
     id: `SES-${5000 + Math.round(minutesAgo)}`,
     startedAt,
     endedAt,
     status,
+    events,
     ...base,
   };
 }
@@ -110,6 +153,7 @@ export function createSession(rec: Omit<SessionRecord, "id" | "startedAt" | "sta
     id: `SES-${6000 + counter}`,
     startedAt: Date.now(),
     status: "requesting",
+    events: [{ ts: Date.now(), kind: "request_created", message: `Requested by ${rec.technician}` }],
     ...rec,
   };
   store = [next, ...store];
@@ -122,10 +166,29 @@ export function updateSession(id: string, patch: Partial<SessionRecord>) {
   emit();
 }
 
+export function appendSessionEvent(id: string, event: Omit<SessionEvent, "ts"> & { ts?: number }) {
+  store = store.map((s) => {
+    if (s.id !== id) return s;
+    const ev: SessionEvent = { ts: event.ts ?? Date.now(), kind: event.kind, message: event.message };
+    return { ...s, events: [...(s.events ?? []), ev] };
+  });
+  emit();
+}
+
 export function endSession(id: string, result: SessionResult, failure?: string) {
   store = store.map((s) =>
     s.id === id
-      ? { ...s, status: result === "Completed" ? "completed" : result === "Cancelled" ? "cancelled" : "failed", result, failure, endedAt: Date.now() }
+      ? {
+          ...s,
+          status: result === "Completed" ? "completed" : result === "Cancelled" ? "cancelled" : "failed",
+          result,
+          failure,
+          endedAt: Date.now(),
+          events: [
+            ...(s.events ?? []),
+            { ts: Date.now(), kind: "disconnected" as SessionEventKind, message: failure ? `${result}: ${failure}` : `Session ${result.toLowerCase()}` },
+          ],
+        }
       : s,
   );
   emit();

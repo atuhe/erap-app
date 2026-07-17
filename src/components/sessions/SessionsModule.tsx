@@ -26,12 +26,16 @@ import {
   useSessions, endSession, SESSION_STATUS_META, formatDuration, formatTime,
   type SessionRecord, type SessionStatus,
 } from "@/lib/sessions";
+import { SessionTimeline } from "./SessionTimeline";
+import { SessionWorkflow, type ConnectTarget } from "./SessionWorkflow";
+import { PlugZap } from "lucide-react";
 
 const CURRENT_USER = "Alex Morgan";
 
 export function SessionsModule() {
   const [role, setRole] = useState<ErapRole>("system_admin");
   const [tab, setTab] = useState<"active" | "history">("active");
+  const [reconnectDevice, setReconnectDevice] = useState<ConnectTarget | null>(null);
   const isAdmin = role === "system_admin" || role === "regional_admin";
 
   useEffect(() => {
@@ -52,15 +56,22 @@ export function SessionsModule() {
               </TabsList>
               {isAdmin && (
                 <TabsContent value="active" className="mt-4">
-                  <ActiveSessionsView role={role} />
+                  <ActiveSessionsView role={role} onReconnect={setReconnectDevice} />
                 </TabsContent>
               )}
               <TabsContent value="history" className="mt-4">
-                <MyHistoryView technician={CURRENT_USER} />
+                <MyHistoryView technician={CURRENT_USER} role={role} onReconnect={setReconnectDevice} />
               </TabsContent>
             </Tabs>
           </div>
         </div>
+        <SessionWorkflow
+          open={!!reconnectDevice}
+          onOpenChange={(v) => !v && setReconnectDevice(null)}
+          device={reconnectDevice}
+          role={role}
+          actor={CURRENT_USER}
+        />
       </div>
     </TooltipProvider>
   );
@@ -139,7 +150,7 @@ function TopBar({ role, setRole }: { role: ErapRole; setRole: (r: ErapRole) => v
   );
 }
 
-function ActiveSessionsView({ role }: { role: ErapRole }) {
+function ActiveSessionsView({ role, onReconnect }: { role: ErapRole; onReconnect: (d: ConnectTarget) => void }) {
   const all = useSessions();
   const [detail, setDetail] = useState<SessionRecord | null>(null);
   const active = useMemo(
@@ -199,7 +210,7 @@ function ActiveSessionsView({ role }: { role: ErapRole }) {
         </Table>
       </div>
 
-      <SessionDetailSheet session={detail} onClose={() => setDetail(null)} />
+      <SessionDetailSheet session={detail} onClose={() => setDetail(null)} role={role} onReconnect={(d) => { onReconnect(d); setDetail(null); }} />
     </div>
   );
 }
@@ -245,7 +256,7 @@ function ActiveRow({
   );
 }
 
-function MyHistoryView({ technician }: { technician: string }) {
+function MyHistoryView({ technician, role, onReconnect }: { technician: string; role: ErapRole; onReconnect: (d: ConnectTarget) => void }) {
   const all = useSessions();
   const [q, setQ] = useState("");
   const [branch, setBranch] = useState("all");
@@ -348,16 +359,21 @@ function MyHistoryView({ technician }: { technician: string }) {
         </Table>
       </div>
 
-      <SessionDetailSheet session={detail} onClose={() => setDetail(null)} />
+      <SessionDetailSheet session={detail} onClose={() => setDetail(null)} role={role} onReconnect={(d) => { onReconnect(d); setDetail(null); }} />
     </div>
   );
 }
 
-function SessionDetailSheet({ session, onClose }: { session: SessionRecord | null; onClose: () => void }) {
+function SessionDetailSheet({ session, onClose, role, onReconnect }: { session: SessionRecord | null; onClose: () => void; role?: ErapRole; onReconnect?: (d: ConnectTarget) => void }) {
   const open = !!session;
+  const canReconnect =
+    !!session && !!role &&
+    hasPermission(role, "remote_desktop") &&
+    (session.status === "completed" || session.status === "cancelled" || session.status === "failed");
+  const target = deriveConnectTarget(session);
   return (
     <Sheet open={open} onOpenChange={(v) => (!v ? onClose() : null)}>
-      <SheetContent className="w-full sm:max-w-md">
+      <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
         {session && (
           <>
             <SheetHeader>
@@ -397,12 +413,57 @@ function SessionDetailSheet({ session, onClose }: { session: SessionRecord | nul
                   <p className="mt-1 text-muted-foreground">{session.failure}</p>
                 </div>
               )}
+              <Card>
+                <CardContent className="p-4">
+                  <div className="mb-3 text-xs font-semibold text-muted-foreground">Session timeline</div>
+                  <SessionTimeline events={session.events} />
+                </CardContent>
+              </Card>
+              {onReconnect && (
+                <div className="flex flex-col gap-2 rounded-md border p-3">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span>
+                        <Button
+                          className="w-full"
+                          disabled={!canReconnect || !target}
+                          onClick={() => target && onReconnect(target)}
+                        >
+                          <PlugZap className="mr-2 h-4 w-4" /> Reconnect to {session.hostname}
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {!canReconnect ? "Your role or the current session status blocks reconnect."
+                        : !target ? "Reconnect target unavailable for this record."
+                        : "Launch the connection workflow against this device."}
+                    </TooltipContent>
+                  </Tooltip>
+                  <p className="text-[11px] text-muted-foreground">Reconnecting starts a brand-new session and re-runs approval unless the endpoint policy permits unattended access.</p>
+                </div>
+              )}
             </div>
           </>
         )}
       </SheetContent>
     </Sheet>
   );
+}
+
+function deriveConnectTarget(session: SessionRecord | null): ConnectTarget | null {
+  if (!session) return null;
+  if (session.deviceSnapshot) return session.deviceSnapshot;
+  return {
+    id: session.deviceId,
+    hostname: session.hostname,
+    currentUser: session.currentUser,
+    branch: session.branch,
+    department: session.department,
+    status: "online",
+    os: "Windows",
+    ip: "10.0.0.0",
+    rustDeskPort: 21118,
+  };
 }
 
 function Row({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
