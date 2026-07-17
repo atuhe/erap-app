@@ -210,10 +210,7 @@ function ActiveSessionsView({ role, onReconnect }: { role: ErapRole; onReconnect
         </Table>
       </div>
 
-      <SessionDetailSheet session={detail} onClose={() => setDetail(null)} />
-      {detail && (
-        <ReconnectHelper session={detail} role={role} onReconnect={(d) => { onReconnect(d); setDetail(null); }} />
-      )}
+      <SessionDetailSheet session={detail} onClose={() => setDetail(null)} role={role} onReconnect={(d) => { onReconnect(d); setDetail(null); }} />
     </div>
   );
 }
@@ -451,11 +448,6 @@ function SessionDetailSheet({ session, onClose, role, onReconnect }: { session: 
       </SheetContent>
     </Sheet>
   );
-}
-
-function ReconnectHelper(_: { session: SessionRecord; role: ErapRole; onReconnect: (d: ConnectTarget) => void }) {
-  // Placeholder — the detail sheet renders the reconnect button when needed.
-  return null;
 }
 
 function deriveConnectTarget(session: SessionRecord | null): ConnectTarget | null {
