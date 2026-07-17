@@ -43,7 +43,6 @@ function seed(): AuditEntry[] {
   return [
     mk(4, { actor: "Alex Morgan", actorRole: "system_admin", category: "user", action: "view_user", target: "Sara Patel", targetId: "U-1002", status: "info", details: "Opened profile" }),
     mk(18, { actor: "Sara Patel", actorRole: "regional_admin", category: "role", action: "role_change", target: "Jamie Nguyen", targetId: "U-1004", status: "success", details: "support_tech → senior_engineer" }),
-    mk: undefined as never,
     mk(55, { actor: "Alex Morgan", actorRole: "system_admin", category: "user", action: "reset_password", target: "Yuki Tanaka", targetId: "U-1005", status: "success", details: "Reset link emailed" }),
     mk(90, { actor: "Karl Mueller", actorRole: "auditor", category: "session", action: "connect_attempt", target: "NYC-FIN-WS01", targetId: "DEV-10241", status: "denied", details: "Role lacks Remote Desktop permission" }),
     mk(140, { actor: "Alex Morgan", actorRole: "system_admin", category: "mfa", action: "mfa_enabled", target: "Emma Brown", targetId: "U-1007", status: "success", details: "Enrollment queued" }),
