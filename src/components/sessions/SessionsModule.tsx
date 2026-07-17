@@ -29,6 +29,7 @@ import {
 import { SessionTimeline } from "./SessionTimeline";
 import { SessionWorkflow, type ConnectTarget } from "./SessionWorkflow";
 import { PlugZap } from "lucide-react";
+import { PageHeader } from "@/components/ui-ext/PageHeader";
 
 const CURRENT_USER = "Alex Morgan";
 
