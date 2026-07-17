@@ -1,24 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { DeviceManagement } from "@/components/device-management/DeviceManagement";
 
-// No head() here: the home route inherits title/description/og/twitter from
-// __root.tsx, and ships no og:image so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
 export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: "Device Management — Remote Admin Console" },
+      { name: "description", content: "Enterprise Windows device management, monitoring, and remote administration." },
+      { property: "og:title", content: "Device Management — Remote Admin Console" },
+      { property: "og:description", content: "Enterprise Windows device management, monitoring, and remote administration." },
+    ],
+  }),
   component: Index,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
 function Index() {
-  return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
-  );
+  return <DeviceManagement />;
 }
