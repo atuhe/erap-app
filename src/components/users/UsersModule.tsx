@@ -522,7 +522,20 @@ function RoleBadge({ role }: { role: ErapRole }) {
 
 // ---------- User Detail Sheet ----------
 
-function UserDetailSheet({ user, onClose, onEdit, canManage }: { user: AppUser | null; onClose: () => void; onEdit: (u: AppUser) => void; canManage: boolean }) {
+function UserDetailSheet({
+  user, onClose, onEdit, canManage,
+  mfaEnabled, onToggleMfa, onReset, onDisable, onUnlock,
+}: {
+  user: AppUser | null;
+  onClose: () => void;
+  onEdit: (u: AppUser) => void;
+  canManage: boolean;
+  mfaEnabled: boolean;
+  onToggleMfa: (next: boolean) => void;
+  onReset: (u: AppUser) => void;
+  onDisable: (u: AppUser) => void;
+  onUnlock: (u: AppUser) => void;
+}) {
   return (
     <Sheet open={!!user} onOpenChange={(o) => !o && onClose()}>
       <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
@@ -536,7 +549,11 @@ function UserDetailSheet({ user, onClose, onEdit, canManage }: { user: AppUser |
                 <div className="mt-2 flex flex-wrap gap-2">
                   <RoleBadge role={user.role} />
                   <StatusBadge status={user.status} />
-                  {user.mfa && <Badge variant="outline" className="gap-1 border-transparent bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"><ShieldCheck className="h-3 w-3" />MFA</Badge>}
+                  {mfaEnabled ? (
+                    <Badge variant="outline" className="gap-1 border-transparent bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"><ShieldCheck className="h-3 w-3" />MFA Required</Badge>
+                  ) : (
+                    <Badge variant="outline" className="gap-1 border-transparent bg-amber-500/10 text-amber-700 dark:text-amber-400"><ShieldAlert className="h-3 w-3" />MFA Off</Badge>
+                  )}
                 </div>
               </div>
             </div>
@@ -561,7 +578,33 @@ function UserDetailSheet({ user, onClose, onEdit, canManage }: { user: AppUser |
               <Field label="Date Created" value={user.createdAt} />
               <Field label="Last Login" value={user.lastLogin} />
               <Field label="Password Last Changed" value={user.passwordChanged} />
-              <Field label="MFA Enabled" value={user.mfa ? "Yes" : "No"} />
+              <Field label="MFA Enabled" value={mfaEnabled ? "Yes" : "No"} />
+            </Section>
+
+            <Section title="Multi-Factor Authentication">
+              <div className="col-span-2 space-y-3">
+                <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
+                  <div>
+                    <div className="text-sm font-medium">Require MFA for this user</div>
+                    <div className="text-xs text-muted-foreground">Placeholder control. Toggling records an audit event.</div>
+                  </div>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span>
+                        <Switch
+                          checked={mfaEnabled}
+                          disabled={!canManage}
+                          onCheckedChange={(v) => onToggleMfa(!!v)}
+                        />
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>{canManage ? "Marks MFA as required — enrollment ships in an upcoming release" : "Requires Manage Users permission"}</TooltipContent>
+                  </Tooltip>
+                </div>
+                <div className="rounded-md border border-primary/20 bg-primary/5 p-3 text-xs text-primary/90">
+                  Rollout note · Enforcement, enrollment and recovery codes ship in a future release. This control marks the intent so admins can stage policy today.
+                </div>
+              </div>
             </Section>
 
             <Section title="Permissions Summary">
@@ -575,9 +618,9 @@ function UserDetailSheet({ user, onClose, onEdit, canManage }: { user: AppUser |
             <Separator />
             <div className="grid grid-cols-2 gap-2">
               <Button disabled={!canManage} onClick={() => onEdit(user)}><UserCog className="mr-2 h-4 w-4" />Edit User</Button>
-              <Button variant="outline" disabled={!canManage} onClick={() => toast.success(`Password reset link sent to ${user.email}`)}><KeyRound className="mr-2 h-4 w-4" />Reset Password</Button>
-              <Button variant="outline" disabled={!canManage || user.status === "disabled"} onClick={() => toast.success(`${user.fullName} disabled`)}><UserX className="mr-2 h-4 w-4" />Disable Account</Button>
-              <Button variant="outline" disabled={!canManage || user.status !== "locked"} onClick={() => toast.success(`${user.fullName} unlocked`)}><Unlock className="mr-2 h-4 w-4" />Unlock Account</Button>
+              <Button variant="outline" disabled={!canManage} onClick={() => onReset(user)}><KeyRound className="mr-2 h-4 w-4" />Reset Password</Button>
+              <Button variant="outline" disabled={!canManage || user.status === "disabled"} onClick={() => onDisable(user)}><UserX className="mr-2 h-4 w-4" />Disable Account</Button>
+              <Button variant="outline" disabled={!canManage || user.status !== "locked"} onClick={() => onUnlock(user)}><Unlock className="mr-2 h-4 w-4" />Unlock Account</Button>
               <Button variant="outline" className="col-span-2" onClick={() => toast("Opening activity timeline…")}><ActivityIcon className="mr-2 h-4 w-4" />View Activity</Button>
             </div>
           </div>
@@ -607,7 +650,7 @@ function Field({ label, value, mono }: { label: string; value: React.ReactNode; 
 
 // ---------- Assign Role Dialog ----------
 
-function AssignRoleDialog({ user, onClose, viewerRole }: { user: AppUser | null; onClose: () => void; viewerRole: ErapRole }) {
+function AssignRoleDialog({ user, onClose, viewerRole, viewerName }: { user: AppUser | null; onClose: () => void; viewerRole: ErapRole; viewerName: string }) {
   const [newRole, setNewRole] = useState<ErapRole>("support_tech");
   const [branch, setBranch] = useState("New York");
   const [dept, setDept] = useState("Support");
@@ -681,7 +724,32 @@ function AssignRoleDialog({ user, onClose, viewerRole }: { user: AppUser | null;
           <Tooltip>
             <TooltipTrigger asChild>
               <span>
-                <Button disabled={!canSave} onClick={() => { toast.success(`Role updated for ${user?.fullName}`); onClose(); }}>Save</Button>
+                <Button disabled={!canSave} onClick={() => {
+                  if (user) {
+                    logAudit({
+                      actor: viewerName,
+                      actorRole: viewerRole,
+                      category: "role",
+                      action: "role_change",
+                      target: user.fullName,
+                      targetId: user.id,
+                      status: "success",
+                      details: `${ROLE_LABELS[user.role]} → ${ROLE_LABELS[newRole]} · ${branch} / ${dept}`,
+                    });
+                    logAudit({
+                      actor: viewerName,
+                      actorRole: viewerRole,
+                      category: "user",
+                      action: "edit_user",
+                      target: user.fullName,
+                      targetId: user.id,
+                      status: "success",
+                      details: "Session permissions updated",
+                    });
+                  }
+                  toast.success(`Role updated for ${user?.fullName}`);
+                  onClose();
+                }}>Save</Button>
               </span>
             </TooltipTrigger>
             {!canSave && <TooltipContent>Requires Manage Users permission</TooltipContent>}
