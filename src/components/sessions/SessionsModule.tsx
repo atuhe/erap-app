@@ -43,12 +43,24 @@ export function SessionsModule() {
   }, [isAdmin, tab]);
 
   return (
-    <TooltipProvider delayDuration={200}>
-      <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
-        <Sidebar />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <TopBar role={role} setRole={setRole} />
-          <div className="flex min-h-0 flex-1 flex-col overflow-auto p-4">
+    <>
+      <PageHeader
+        title="Remote Sessions"
+        description="Live remote sessions and technician history."
+        actions={
+          <Select value={role} onValueChange={(v) => setRole(v as ErapRole)}>
+            <SelectTrigger className="h-9 w-[200px]" aria-label="Active role">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(Object.keys(ROLE_LABELS) as ErapRole[]).map((r) => (
+                <SelectItem key={r} value={r}>Role: {ROLE_LABELS[r]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        }
+      />
+      <div className="flex min-h-0 flex-1 flex-col overflow-auto p-4">
             <Tabs value={tab} onValueChange={(v) => setTab(v as "active" | "history")}>
               <TabsList>
                 {isAdmin && <TabsTrigger value="active">Active sessions</TabsTrigger>}
@@ -63,17 +75,15 @@ export function SessionsModule() {
                 <MyHistoryView technician={CURRENT_USER} role={role} onReconnect={setReconnectDevice} />
               </TabsContent>
             </Tabs>
-          </div>
-        </div>
-        <SessionWorkflow
+      </div>
+      <SessionWorkflow
           open={!!reconnectDevice}
           onOpenChange={(v) => !v && setReconnectDevice(null)}
           device={reconnectDevice}
           role={role}
           actor={CURRENT_USER}
-        />
-      </div>
-    </TooltipProvider>
+      />
+    </>
   );
 }
 
