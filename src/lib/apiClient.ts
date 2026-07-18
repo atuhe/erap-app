@@ -37,6 +37,9 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   // 401 = not authenticated (token missing/expired) -> force re-login
   if (response.status === 401) {
     clearToken();
+    if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+      window.location.assign("/login");
+    }
     throw new ApiError(401, "Your session has expired. Please sign in again.");
   }
   // 403 = authenticated but lacks the permission for this action
