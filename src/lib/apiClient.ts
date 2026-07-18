@@ -34,16 +34,28 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
 
   const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
 
-  // 401 = not authenticated (token missing/expired). Clear the token and let
-  // the app's root listener soft-navigate to /login (preserving the current
-  // URL as `redirect` search param) so page state isn't lost to a hard reload.
+  // 401 = not authenticated. Two cases share this status:
+  //  - a failed sign-in (backend sends { message: "Invalid username or password." })
+  //  - an expired/absent token on a protected page
+  // Surface the backend's message when present; otherwise assume an expired
+  // session. Only fire the redirect event when NOT already on /login, so a
+  // wrong password on the sign-in form doesn't try to bounce the user.
   if (response.status === 401) {
     clearToken();
+
+    let message = "Your session has expired. Please sign in again.";
+    try {
+      const body = await response.json();
+      if (body?.message) message = body.message;
+    } catch {
+      /* no JSON body — keep the session-expired default */
+    }
+
     if (typeof window !== "undefined" && window.location.pathname !== "/login") {
       const from = window.location.pathname + window.location.search;
       window.dispatchEvent(new CustomEvent("erap:unauthorized", { detail: { from } }));
     }
-    throw new ApiError(401, "Your session has expired. Please sign in again.");
+    throw new ApiError(401, message);
   }
   // 403 = authenticated but lacks the permission for this action
   if (response.status === 403) {
