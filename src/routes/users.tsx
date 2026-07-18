@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { UsersModule } from "@/components/users/UsersModule";
+import { requirePermission } from "@/lib/route-guards";
 
 export const Route = createFileRoute("/users")({
+  beforeLoad: () => requirePermission("users.manage"),
   head: () => ({
     meta: [
       { title: "Users, Roles & Permissions — Remote Admin Console" },

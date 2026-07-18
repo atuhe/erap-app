@@ -34,11 +34,14 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
 
   const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
 
-  // 401 = not authenticated (token missing/expired) -> force re-login
+  // 401 = not authenticated (token missing/expired). Clear the token and let
+  // the app's root listener soft-navigate to /login (preserving the current
+  // URL as `redirect` search param) so page state isn't lost to a hard reload.
   if (response.status === 401) {
     clearToken();
     if (typeof window !== "undefined" && window.location.pathname !== "/login") {
-      window.location.assign("/login");
+      const from = window.location.pathname + window.location.search;
+      window.dispatchEvent(new CustomEvent("erap:unauthorized", { detail: { from } }));
     }
     throw new ApiError(401, "Your session has expired. Please sign in again.");
   }

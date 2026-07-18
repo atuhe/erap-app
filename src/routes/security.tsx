@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { SecurityCenter } from "@/components/security/SecurityCenter";
+import { requirePermission } from "@/lib/route-guards";
 
 export const Route = createFileRoute("/security")({
+  beforeLoad: () => requirePermission("audit.view"),
   head: () => ({
     meta: [
       { title: "Security Center — ERAP" },
