@@ -22,7 +22,7 @@ export const Route = createFileRoute("/login")({
   }),
   beforeLoad: ({ search }) => {
     if (typeof window !== "undefined" && isAuthenticated()) {
-      throw redirect({ to: search.redirect ?? "/" });
+      throw redirect(search.redirect ? { href: search.redirect } : { to: "/" });
     }
   },
   component: LoginPage,
@@ -48,7 +48,11 @@ function LoginPage() {
     setSubmitting(true);
     try {
       await login(username.trim(), password);
-      navigate({ to: search.redirect ?? "/" });
+      if (search.redirect) {
+        navigate({ href: search.redirect });
+      } else {
+        navigate({ to: "/" });
+      }
     } catch (err) {
       const message =
         err instanceof ApiError
