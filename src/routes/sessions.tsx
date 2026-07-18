@@ -1,8 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { SessionsModule } from "@/components/sessions/SessionsModule";
 import { AppShell } from "@/components/shell/AppShell";
+import { requirePermission } from "@/lib/route-guards";
 
 export const Route = createFileRoute("/sessions")({
+  beforeLoad: () => requirePermission("sessions.start"),
   head: () => ({
     meta: [
       { title: "Remote Sessions — ERAP Console" },
