@@ -4,6 +4,7 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useNavigate,
   HeadContent,
   Scripts,
   redirect,
@@ -71,7 +72,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     if (typeof window === "undefined") return;
     if (location.pathname === "/login") return;
     if (!isAuthenticated()) {
-      throw redirect({ to: "/login" });
+      throw redirect({
+        to: "/login",
+        search: { redirect: location.pathname + location.searchStr },
+      });
     }
   },
   head: () => ({
@@ -119,6 +123,19 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const navigate = useNavigate();
+
+  // Global 401 handler: apiClient dispatches `erap:unauthorized` when a
+  // request fails auth. Soft-navigate to /login with a `redirect` back to the
+  // current URL so page/query state isn't blown away by a hard reload.
+  useEffect(() => {
+    const onUnauthorized = (e: Event) => {
+      const detail = (e as CustomEvent<{ from?: string }>).detail ?? {};
+      navigate({ to: "/login", search: { redirect: detail.from ?? "/" } });
+    };
+    window.addEventListener("erap:unauthorized", onUnauthorized);
+    return () => window.removeEventListener("erap:unauthorized", onUnauthorized);
+  }, [navigate]);
 
   return (
     <QueryClientProvider client={queryClient}>
