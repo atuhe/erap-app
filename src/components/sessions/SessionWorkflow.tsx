@@ -64,7 +64,12 @@ interface Props {
   onViewHistory?: () => void;
 }
 
-export function SessionWorkflow({ open, onOpenChange, device, role, actor, onViewHistory }: Props) {
+export function SessionWorkflow(props: Props) {
+  if (!props.device) return null;
+  return <SessionWorkflowInner {...props} device={props.device} />;
+}
+
+function SessionWorkflowInner({ open, onOpenChange, device, role, actor, onViewHistory }: Props & { device: ConnectTarget }) {
   const [phase, setPhase] = useState<Phase>("confirm");
   const [reason, setReason] = useState("");
   const [mode, setMode] = useState<"approval" | "unattended">("approval");
@@ -98,8 +103,6 @@ export function SessionWorkflow({ open, onOpenChange, device, role, actor, onVie
       setHandshakeStep(null);
     }
   }, [open, device?.id]);
-
-  if (!device) return null;
 
   const log = (
     action: string,
@@ -156,6 +159,7 @@ export function SessionWorkflow({ open, onOpenChange, device, role, actor, onVie
     let cancelled = false;
     (async () => {
       const res = await startRustDeskSession(device, {
+        reason: reason.trim(),
         onStep: (step) => {
           if (cancelled) return;
           setHandshakeStep(step);

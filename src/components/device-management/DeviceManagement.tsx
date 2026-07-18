@@ -44,7 +44,8 @@ import { cn } from "@/lib/utils";
 import { ErapRole, ROLE_LABELS, hasPermission, Permission } from "@/lib/erap-roles";
 import { logAudit } from "@/lib/audit-log";
 import { useNavigate } from "@tanstack/react-router";
-import { SessionWorkflow, type ConnectTarget } from "@/components/sessions/SessionWorkflow";
+import { type ConnectTarget } from "@/components/sessions/SessionWorkflow";
+import { ConnectDialog } from "@/features/sessions/ConnectDialog";
 
 type Status = "online" | "offline";
 
@@ -104,10 +105,14 @@ export function DeviceManagement() {
   // --- Real device inventory, loaded from the ERAP API on mount ---
   const [devices, setDevices] = useState<Device[]>([]);
 
-  useEffect(() => {
+  const loadDevices = () =>
     getDevices()
       .then((rows) => setDevices(rows.map(toUiDevice)))
       .catch((err) => toast.error(err?.message ?? "Failed to load devices"));
+
+  useEffect(() => {
+    void loadDevices();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Distinct values for the filter dropdowns, derived from what actually loaded.
@@ -489,13 +494,11 @@ export function DeviceManagement() {
         </div>
       </div>
     </div>
-    <SessionWorkflow
+    <ConnectDialog
       open={!!connectDevice}
       onOpenChange={(v) => !v && setConnectDevice(null)}
       device={connectDevice}
-      role={role}
-      actor={viewerName}
-      onViewHistory={() => navigate({ to: "/sessions" })}
+      onConnected={() => void loadDevices()}
     />
     </>
    </TooltipProvider>
