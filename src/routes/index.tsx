@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { DeviceManagement } from "@/components/device-management/DeviceManagement";
+import { requirePermission } from "@/lib/route-guards";
 
 export const Route = createFileRoute("/")({
+  beforeLoad: () => requirePermission("devices.view"),
   head: () => ({
     meta: [
       { title: "Device Management — Remote Admin Console" },
