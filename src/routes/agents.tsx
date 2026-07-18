@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AgentManagement } from "@/components/agents/AgentManagement";
+import { requirePermission } from "@/lib/route-guards";
 
 export const Route = createFileRoute("/agents")({
+  beforeLoad: () => requirePermission("devices.manage"),
   head: () => ({
     meta: [
       { title: "Agent Management — Remote Admin Console" },
