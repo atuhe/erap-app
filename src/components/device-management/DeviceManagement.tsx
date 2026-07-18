@@ -1,4 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { getDevices } from "@/features/devices/deviceService";
+import type { Device as ApiDevice } from "@/features/devices/device.types";
 import {
   LayoutDashboard,
   MonitorSmartphone,
@@ -59,18 +61,24 @@ interface Device {
   rustDeskPort: number;
 }
 
-const DEVICES: Device[] = [
-  { id: "DEV-10241", hostname: "NYC-FIN-WS01", currentUser: "a.morgan", branch: "New York", department: "Finance", status: "online", lastSeen: "2 min ago", os: "Windows 11 Pro 23H2", ip: "10.24.11.42", rustDeskPort: 21118 },
-  { id: "DEV-10242", hostname: "LON-HR-LT14", currentUser: "s.patel", branch: "London", department: "HR", status: "online", lastSeen: "just now", os: "Windows 11 Pro 23H2", ip: "10.44.9.18", rustDeskPort: 21118 },
-  { id: "DEV-10243", hostname: "BER-ENG-WS22", currentUser: "m.klein", branch: "Berlin", department: "Engineering", status: "offline", lastSeen: "3 h ago", os: "Windows 10 Enterprise 22H2", ip: "10.61.4.201", rustDeskPort: 21118 },
-  { id: "DEV-10244", hostname: "SFO-DES-MB08", currentUser: "j.nguyen", branch: "San Francisco", department: "Design", status: "online", lastSeen: "5 min ago", os: "Windows 11 Pro 24H2", ip: "10.12.7.66", rustDeskPort: 21118 },
-  { id: "DEV-10245", hostname: "TOK-OPS-WS05", currentUser: "y.tanaka", branch: "Tokyo", department: "Operations", status: "offline", lastSeen: "1 d ago", os: "Windows Server 2022", ip: "10.88.2.9", rustDeskPort: 21118 },
-  { id: "DEV-10246", hostname: "NYC-ENG-WS31", currentUser: "r.silva", branch: "New York", department: "Engineering", status: "online", lastSeen: "1 min ago", os: "Windows 11 Pro 24H2", ip: "10.24.11.77", rustDeskPort: 21118 },
-  { id: "DEV-10247", hostname: "LON-FIN-LT02", currentUser: "e.brown", branch: "London", department: "Finance", status: "online", lastSeen: "8 min ago", os: "Windows 11 Pro 23H2", ip: "10.44.9.44", rustDeskPort: 21118 },
-  { id: "DEV-10248", hostname: "BER-HR-WS10", currentUser: "k.mueller", branch: "Berlin", department: "HR", status: "offline", lastSeen: "5 h ago", os: "Windows 10 Enterprise 22H2", ip: "10.61.4.115", rustDeskPort: 21118 },
-  { id: "DEV-10249", hostname: "SFO-OPS-WS17", currentUser: "l.chen", branch: "San Francisco", department: "Operations", status: "online", lastSeen: "12 min ago", os: "Windows 11 Pro 24H2", ip: "10.12.7.88", rustDeskPort: 21118 },
-  { id: "DEV-10250", hostname: "TOK-DES-MB03", currentUser: "h.sato", branch: "Tokyo", department: "Design", status: "online", lastSeen: "just now", os: "Windows 11 Pro 23H2", ip: "10.88.2.31", rustDeskPort: 21118 },
-];
+// Maps a backend DeviceDto (camelCase, straight from Oracle) into the shape
+// this UI already uses. This is the ONLY translation layer — everything below
+// keeps working unchanged because it still sees the same `Device` interface.
+function toUiDevice(d: ApiDevice): Device {
+  return {
+    id: `DEV-${d.deviceId}`,
+    hostname: d.hostname,
+    currentUser: d.currentUsername ?? "—",
+    branch: d.branch ?? "—",
+    department: d.department ?? "—",
+    // The UI only knows online/offline, so fold the backend's four states down.
+    status: d.status === "Online" || d.status === "In Session" ? "online" : "offline",
+    lastSeen: d.lastSeen ? new Date(d.lastSeen).toLocaleString() : "—",
+    os: d.osVersion ?? "—",
+    ip: d.ipAddress ?? "—",
+    rustDeskPort: d.rustDeskPort,
+  };
+}
 
 const NAV: { key: string; label: string; icon: typeof LayoutDashboard; perm?: Permission }[] = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -81,8 +89,6 @@ const NAV: { key: string; label: string; icon: typeof LayoutDashboard; perm?: Pe
   { key: "settings", label: "Settings", icon: SettingsIcon },
 ];
 
-const UNIQUE = <K extends keyof Device>(k: K) => Array.from(new Set(DEVICES.map((d) => String(d[k]))));
-
 export function DeviceManagement() {
   const [active, setActive] = useState("devices");
   const [role, setRole] = useState<ErapRole>("system_admin");
@@ -91,13 +97,26 @@ export function DeviceManagement() {
   const [department, setDepartment] = useState("all");
   const [status, setStatus] = useState("all");
   const [os, setOs] = useState("all");
-  const [selectedId, setSelectedId] = useState<string | null>(DEVICES[0].id);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [connectDevice, setConnectDevice] = useState<ConnectTarget | null>(null);
   const navigate = useNavigate();
 
+  // --- Real device inventory, loaded from the ERAP API on mount ---
+  const [devices, setDevices] = useState<Device[]>([]);
+
+  useEffect(() => {
+    getDevices()
+      .then((rows) => setDevices(rows.map(toUiDevice)))
+      .catch((err) => toast.error(err?.message ?? "Failed to load devices"));
+  }, []);
+
+  // Distinct values for the filter dropdowns, derived from what actually loaded.
+  const UNIQUE = <K extends keyof Device>(k: K) =>
+    Array.from(new Set(devices.map((d) => String(d[k]))));
+
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
-    return DEVICES.filter((d) => {
+    return devices.filter((d) => {
       if (branch !== "all" && d.branch !== branch) return false;
       if (department !== "all" && d.department !== department) return false;
       if (status !== "all" && d.status !== status) return false;
@@ -109,9 +128,9 @@ export function DeviceManagement() {
         d.currentUser.toLowerCase().includes(term)
       );
     });
-  }, [q, branch, department, status, os]);
+  }, [q, branch, department, status, os, devices]);
 
-  const selected = filtered.find((d) => d.id === selectedId) ?? DEVICES.find((d) => d.id === selectedId) ?? null;
+  const selected = filtered.find((d) => d.id === selectedId) ?? devices.find((d) => d.id === selectedId) ?? null;
   const viewerName = "Alex Morgan";
 
   const can = {
@@ -147,7 +166,7 @@ export function DeviceManagement() {
       toast.error("Your role can't start remote sessions");
       return;
     }
-    const full = DEVICES.find((x) => x.id === d.id);
+    const full = devices.find((x) => x.id === d.id);
     if (!full) return;
     setConnectDevice(full);
   };
@@ -301,7 +320,7 @@ export function DeviceManagement() {
               />
               <FilterSelect label="Operating System" value={os} onChange={setOs} options={UNIQUE("os")} />
               <div className="ml-auto text-xs text-muted-foreground">
-                {filtered.length} of {DEVICES.length} devices
+                {filtered.length} of {devices.length} devices
               </div>
             </div>
 
@@ -364,7 +383,9 @@ export function DeviceManagement() {
                       {filtered.length === 0 && (
                         <TableRow>
                           <TableCell colSpan={8} className="h-32 text-center text-sm text-muted-foreground">
-                            No devices match the current filters.
+                            {devices.length === 0
+                              ? "Loading devices… (or none registered yet)"
+                              : "No devices match the current filters."}
                           </TableCell>
                         </TableRow>
                       )}
