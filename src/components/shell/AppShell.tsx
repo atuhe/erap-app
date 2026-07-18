@@ -1,14 +1,24 @@
 import { type ReactNode, useState } from "react";
-import { Link, useRouterState } from "@tanstack/react-router";
-import { Bell, ChevronDown, Menu, Plug, Search, ShieldAlert } from "lucide-react";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { Bell, ChevronDown, LogOut, Menu, Plug, Search, ShieldAlert, User as UserIcon } from "lucide-react";
+import { toast } from "sonner";
 
 import { APP_NAV, ROUTE_META } from "@/lib/nav";
 import { hasPermission, ROLE_LABELS, type ErapRole } from "@/lib/erap-roles";
+import { getProfile, logout } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -179,6 +189,17 @@ function FooterBlock() {
 
 function TopBar({ title, crumbs }: { title: string; crumbs: { label: string; to?: string }[] }) {
   const [role, setRoleValue] = useAppRole();
+  const navigate = useNavigate();
+  const profile = getProfile();
+  const displayName = profile?.fullName ?? profile?.username ?? "Account";
+  const initials = (displayName.match(/\b\w/g) ?? ["A"]).slice(0, 2).join("").toUpperCase();
+
+  function handleSignOut() {
+    logout();
+    toast.success("Signed out");
+    navigate({ to: "/login" });
+  }
+
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b bg-card px-3 sm:px-4">
       <MobileNavTrigger />
@@ -229,17 +250,41 @@ function TopBar({ title, crumbs }: { title: string; crumbs: { label: string; to?
       <Button variant="ghost" size="icon" aria-label="Notifications">
         <Bell className="h-4 w-4" aria-hidden />
       </Button>
-      <button
-        type="button"
-        className="flex items-center gap-2 rounded-md border px-2 py-1 text-xs hover:bg-accent"
-        aria-label="Account menu"
-      >
-        <span className="grid h-6 w-6 place-items-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-          AM
-        </span>
-        <span className="hidden sm:inline">Alex Morgan</span>
-        <ChevronDown className="h-3 w-3 text-muted-foreground" aria-hidden />
-      </button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className="flex items-center gap-2 rounded-md border px-2 py-1 text-xs hover:bg-accent"
+            aria-label="Account menu"
+          >
+            <span className="grid h-6 w-6 place-items-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+              {initials}
+            </span>
+            <span className="hidden sm:inline">{displayName}</span>
+            <ChevronDown className="h-3 w-3 text-muted-foreground" aria-hidden />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuLabel className="flex flex-col gap-0.5">
+            <span className="text-sm">{displayName}</span>
+            {profile?.username && (
+              <span className="text-[11px] font-normal text-muted-foreground">
+                {profile.username}
+              </span>
+            )}
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem disabled>
+            <UserIcon className="mr-2 h-4 w-4" aria-hidden />
+            Profile
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={handleSignOut} className="text-destructive focus:text-destructive">
+            <LogOut className="mr-2 h-4 w-4" aria-hidden />
+            Sign out
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </header>
   );
 }
