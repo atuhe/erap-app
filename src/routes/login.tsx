@@ -20,9 +20,9 @@ export const Route = createFileRoute("/login")({
   validateSearch: (s: Record<string, unknown>) => ({
     redirect: typeof s.redirect === "string" ? s.redirect : undefined,
   }),
-  beforeLoad: ({ search }) => {
+  beforeLoad: () => {
     if (typeof window !== "undefined" && isAuthenticated()) {
-      throw redirect({ to: (search.redirect ?? "/") as string });
+      throw redirect({ to: "/" });
     }
   },
   component: LoginPage,
@@ -48,7 +48,13 @@ function LoginPage() {
     setSubmitting(true);
     try {
       await login(username.trim(), password);
-      navigate({ to: (search.redirect ?? "/") as string });
+      if (search.redirect && search.redirect !== "/login") {
+        // Use the browser navigator for arbitrary hrefs so we don't fight the
+        // typed route registry (paths can include unknown query strings).
+        window.location.assign(search.redirect);
+      } else {
+        navigate({ to: "/" });
+      }
     } catch (err) {
       const message =
         err instanceof ApiError
