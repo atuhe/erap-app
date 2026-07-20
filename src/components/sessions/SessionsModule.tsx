@@ -23,15 +23,19 @@ import { toast } from "sonner";
 import { ErapRole, ROLE_LABELS, hasPermission } from "@/lib/erap-roles";
 import { logAudit } from "@/lib/audit-log";
 import {
-  useSessions, endSession, SESSION_STATUS_META, formatDuration, formatTime,
+  SESSION_STATUS_META, formatDuration, formatTime,
   type SessionRecord, type SessionStatus,
 } from "@/lib/sessions";
 import { SessionTimeline } from "./SessionTimeline";
-import { SessionWorkflow, type ConnectTarget } from "./SessionWorkflow";
+import { type ConnectTarget } from "./SessionWorkflow";
+import { ConnectDialog } from "@/features/sessions/ConnectDialog";
+import { useBackendSessions } from "@/features/sessions/useBackendSessions";
+import { terminateSession } from "@/features/sessions/sessionService";
+import { getProfile } from "@/lib/auth";
 import { PlugZap } from "lucide-react";
 import { PageHeader } from "@/components/ui-ext/PageHeader";
 
-const CURRENT_USER = "Alex Morgan";
+const CURRENT_USER = getProfile()?.username ?? "admin";
 
 export function SessionsModule() {
   const [role, setRole] = useState<ErapRole>("system_admin");
@@ -77,12 +81,10 @@ export function SessionsModule() {
               </TabsContent>
             </Tabs>
       </div>
-      <SessionWorkflow
+      <ConnectDialog
           open={!!reconnectDevice}
           onOpenChange={(v) => !v && setReconnectDevice(null)}
           device={reconnectDevice}
-          role={role}
-          actor={CURRENT_USER}
       />
     </>
   );
@@ -162,7 +164,7 @@ function TopBar({ role, setRole }: { role: ErapRole; setRole: (r: ErapRole) => v
 }
 
 function ActiveSessionsView({ role, onReconnect }: { role: ErapRole; onReconnect: (d: ConnectTarget) => void }) {
-  const all = useSessions();
+  const all = useBackendSessions();
   const [detail, setDetail] = useState<SessionRecord | null>(null);
   const active = useMemo(
     () => all.filter((s) => s.status === "connected" || s.status === "awaiting_approval" || s.status === "requesting"),
@@ -183,7 +185,7 @@ function ActiveSessionsView({ role, onReconnect }: { role: ErapRole; onReconnect
       toast.error("Your role can't terminate sessions");
       return;
     }
-    endSession(s.id, "Cancelled", "Terminated by administrator");
+    void terminateSession(s.id).catch(() => {});
     logAudit({ actor: CURRENT_USER, actorRole: role, category: "session", action: "terminate_session", target: s.hostname, targetId: s.deviceId, status: "success", details: `Session ${s.id}` });
     toast.success(`Terminated session on ${s.hostname}`);
   };
@@ -268,7 +270,7 @@ function ActiveRow({
 }
 
 function MyHistoryView({ technician, role, onReconnect }: { technician: string; role: ErapRole; onReconnect: (d: ConnectTarget) => void }) {
-  const all = useSessions();
+  const all = useBackendSessions();
   const [q, setQ] = useState("");
   const [branch, setBranch] = useState("all");
   const [status, setStatus] = useState<string>("all");
