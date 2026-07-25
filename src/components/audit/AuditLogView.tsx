@@ -18,11 +18,12 @@ import {
   formatAuditTime,
   useAuditLog,
 } from "@/lib/audit-log";
+import { useBackendAudit } from "@/features/audit/useBackendAudit";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 export function AuditLogView({ canExport = false }: { canExport?: boolean }) {
-  const entries = useAuditLog();
+  const entries = useBackendAudit();
   const [q, setQ] = useState("");
   const [cat, setCat] = useState<string>("all");
   const [status, setStatus] = useState<string>("all");
