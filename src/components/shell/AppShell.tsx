@@ -4,7 +4,7 @@ import { Bell, ChevronDown, LogOut, Menu, Plug, Search, ShieldAlert, User as Use
 import { toast } from "sonner";
 
 import { APP_NAV, ROUTE_META } from "@/lib/nav";
-import { hasPermission, ROLE_LABELS, type ErapRole } from "@/lib/erap-roles";
+import { hasPermission, ROLE_LABELS, ALL_ROLES, type ErapRole } from "@/lib/erap-roles";
 import { getProfile, logout } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,10 +49,15 @@ export function subscribeRole(cb: (r: ErapRole) => void) {
 }
 
 import { useEffect } from "react";
+function deriveRole(roles: string[] | undefined): ErapRole {
+  const found = (roles ?? []).find((r) => (ALL_ROLES as string[]).includes(r));
+  return (found as ErapRole) ?? "Viewer";
+}
+
 export function useAppRole() {
-  const [r, setR] = useState<ErapRole>(currentRole);
-  useEffect(() => subscribeRole(setR), []);
-  return [r, setRole] as const;
+  // The role now comes from the authenticated user's profile — not a switcher.
+  const role = deriveRole(getProfile()?.roles);
+  return [role, setRole] as const;
 }
 
 export interface AppShellProps {
@@ -188,7 +193,7 @@ function FooterBlock() {
 }
 
 function TopBar({ title, crumbs }: { title: string; crumbs: { label: string; to?: string }[] }) {
-  const [role, setRoleValue] = useAppRole();
+  const [role] = useAppRole();
   const navigate = useNavigate();
   const profile = getProfile();
   const displayName = profile?.fullName ?? profile?.username ?? "Account";
@@ -235,18 +240,13 @@ function TopBar({ title, crumbs }: { title: string; crumbs: { label: string; to?
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
         <Input aria-label="Global search" placeholder="Search devices, users, sessions…" className="h-9 pl-9" />
       </div>
-      <Select value={role} onValueChange={(v) => setRoleValue(v as ErapRole)}>
-        <SelectTrigger aria-label="Active role" className="h-9 w-[180px] hidden sm:inline-flex">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {(Object.keys(ROLE_LABELS) as ErapRole[]).map((r) => (
-            <SelectItem key={r} value={r}>
-              Role: {ROLE_LABELS[r]}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <div
+        className="hidden h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium text-muted-foreground sm:inline-flex"
+        aria-label="Your role"
+        title="Your assigned role"
+      >
+        <span className="text-foreground">{ROLE_LABELS[role]}</span>
+      </div>
       <Button variant="ghost" size="icon" aria-label="Notifications">
         <Bell className="h-4 w-4" aria-hidden />
       </Button>
