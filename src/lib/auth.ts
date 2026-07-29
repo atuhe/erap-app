@@ -1,4 +1,5 @@
 import { apiFetch, setToken, clearToken, PROFILE_KEY } from "./apiClient";
+import { resetSessionTimeout, stopSessionTimeout } from "./session-timeout";
 
 // Demo credentials — lets the app be used without the ERAP backend running.
 // Any request against `admin` / `Admin@123` resolves locally with a full
@@ -40,6 +41,7 @@ export async function login(username: string, password: string): Promise<Profile
   if (username.trim().toLowerCase() === DEMO_USERNAME && password === DEMO_PASSWORD) {
     setToken(DEMO_TOKEN);
     sessionStorage.setItem(PROFILE_KEY, JSON.stringify(DEMO_PROFILE));
+    resetSessionTimeout();
     return DEMO_PROFILE;
   }
 
@@ -57,10 +59,12 @@ export async function login(username: string, password: string): Promise<Profile
     permissions: result.permissions,
   };
   sessionStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+  resetSessionTimeout();
   return profile;
 }
 
 export function logout(): void {
+  stopSessionTimeout();
   clearToken();
 }
 
