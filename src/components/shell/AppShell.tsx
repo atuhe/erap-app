@@ -275,7 +275,7 @@ function TopBar({ title, crumbs }: { title: string; crumbs: { label: string; to?
   function handleSignOut() {
     logout();
     toast.success("Signed out");
-    navigate({ to: "/login" });
+    navigate({ to: "/login", search: { redirect: undefined } });
   }
 
   return (
