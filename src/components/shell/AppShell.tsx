@@ -1,6 +1,6 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, createContext, useContext, useEffect, useState } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { Bell, ChevronDown, LogOut, Menu, Plug, Search, ShieldAlert, User as UserIcon } from "lucide-react";
+import { Bell, ChevronDown, ChevronsLeft, ChevronsRight, LogOut, Menu, Search, ShieldAlert, User as UserIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { APP_NAV, ROUTE_META } from "@/lib/nav";
@@ -48,7 +48,6 @@ export function subscribeRole(cb: (r: ErapRole) => void) {
   };
 }
 
-import { useEffect } from "react";
 function deriveRole(roles: string[] | undefined): ErapRole {
   const found = (roles ?? []).find((r) => (ALL_ROLES as string[]).includes(r));
   return (found as ErapRole) ?? "Viewer";
@@ -59,6 +58,12 @@ export function useAppRole() {
   const role = deriveRole(getProfile()?.roles);
   return [role, setRole] as const;
 }
+
+const COLLAPSE_KEY = "erap:sidebar:collapsed";
+const SidebarCollapseCtx = createContext<{ collapsed: boolean; toggle: () => void }>({
+  collapsed: false,
+  toggle: () => {},
+});
 
 export interface AppShellProps {
   children: ReactNode;
@@ -73,8 +78,23 @@ export function AppShell({ children, breadcrumbs, title }: AppShellProps) {
   const meta = ROUTE_META[pathname];
   const crumbs = breadcrumbs ?? meta?.breadcrumbs ?? [];
   const pageTitle = title ?? meta?.title ?? "Console";
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setCollapsed(window.localStorage.getItem(COLLAPSE_KEY) === "1");
+  }, []);
+  const toggle = () => {
+    setCollapsed((v) => {
+      const next = !v;
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(COLLAPSE_KEY, next ? "1" : "0");
+      }
+      return next;
+    });
+  };
 
   return (
+    <SidebarCollapseCtx.Provider value={{ collapsed, toggle }}>
     <TooltipProvider delayDuration={200}>
       <a
         href="#erap-main"
@@ -92,14 +112,20 @@ export function AppShell({ children, breadcrumbs, title }: AppShellProps) {
         </div>
       </div>
     </TooltipProvider>
+    </SidebarCollapseCtx.Provider>
   );
 }
 
 function DesktopSidebar() {
+  const { collapsed } = useContext(SidebarCollapseCtx);
   return (
     <aside
       aria-label="Primary"
-      className="hidden w-64 shrink-0 flex-col bg-sidebar text-sidebar-foreground md:flex"
+      data-collapsed={collapsed ? "true" : "false"}
+      className={cn(
+        "hidden shrink-0 flex-col bg-sidebar text-sidebar-foreground transition-[width] duration-200 md:flex",
+        collapsed ? "w-16" : "w-64",
+      )}
     >
       <BrandBlock />
       <NavBlock />
@@ -109,29 +135,50 @@ function DesktopSidebar() {
 }
 
 function BrandBlock() {
+  const { collapsed, toggle } = useContext(SidebarCollapseCtx);
   return (
-    <div className="flex h-14 items-center gap-2.5 border-b border-sidebar-border px-4">
-      <div className="grid h-8 w-8 place-items-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground font-bold text-sm tracking-tight shadow-sm">
+    <div className={cn(
+      "flex h-14 items-center gap-2.5 border-b border-sidebar-border",
+      collapsed ? "justify-center px-2" : "px-4",
+    )}>
+      <div className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground font-bold text-sm tracking-tight shadow-sm">
         E
       </div>
-      <div className="leading-tight">
-        <div className="text-sm font-semibold tracking-wide text-sidebar-foreground">ERAP</div>
-        <div className="text-[10px] uppercase tracking-wider text-sidebar-foreground/50">Remote Administration</div>
-      </div>
+      {!collapsed && (
+        <>
+          <div className="min-w-0 flex-1 leading-tight">
+            <div className="text-sm font-semibold tracking-wide text-sidebar-foreground">ERAP</div>
+            <div className="text-[10px] uppercase tracking-wider text-sidebar-foreground/50">Remote Administration</div>
+          </div>
+          <button
+            type="button"
+            onClick={toggle}
+            aria-label="Collapse sidebar"
+            className="grid h-7 w-7 place-items-center rounded-md text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          >
+            <ChevronsLeft className="h-4 w-4" aria-hidden />
+          </button>
+        </>
+      )}
     </div>
   );
 }
 
 function NavBlock() {
   const [role] = useAppRole();
+  const { collapsed } = useContext(SidebarCollapseCtx);
   const pathname = useRouterState({ select: (r) => r.location.pathname });
   return (
-    <nav aria-label="Modules" className="flex-1 space-y-4 overflow-auto p-3">
+    <nav aria-label="Modules" className={cn("flex-1 overflow-auto", collapsed ? "space-y-2 p-2" : "space-y-4 p-3")}>
       {APP_NAV.map((group) => (
         <div key={group.key}>
-          <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">
-            {group.label}
-          </div>
+          {collapsed ? (
+            <div className="mx-2 mb-1 h-px bg-sidebar-border" aria-hidden />
+          ) : (
+            <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">
+              {group.label}
+            </div>
+          )}
           <div className="space-y-0.5">
             {group.items.map((item) => {
               const disabled = !!item.perm && !hasPermission(role, item.perm);
@@ -140,7 +187,8 @@ function NavBlock() {
               const inner = (
                 <span
                   className={cn(
-                    "flex items-center gap-3 rounded-md border-l-[3px] px-3 py-2 text-sm transition-colors",
+                    "flex items-center rounded-md border-l-[3px] text-sm transition-colors",
+                    collapsed ? "justify-center gap-0 px-0 py-2" : "gap-3 px-3 py-2",
                     isActive
                       ? "border-sidebar-primary bg-sidebar-accent text-sidebar-accent-foreground font-semibold"
                       : disabled
@@ -149,7 +197,7 @@ function NavBlock() {
                   )}
                 >
                   <Icon className="h-4 w-4" aria-hidden />
-                  <span className="truncate">{item.label}</span>
+                  {!collapsed && <span className="truncate">{item.label}</span>}
                 </span>
               );
               if (disabled) {
@@ -159,20 +207,30 @@ function NavBlock() {
                       <div aria-disabled className="opacity-100">{inner}</div>
                     </TooltipTrigger>
                     <TooltipContent side="right">
-                      Requires {item.perm} permission
+                      {item.label} — requires {item.perm} permission
                     </TooltipContent>
                   </Tooltip>
                 );
               }
-              return (
+              const link = (
                 <Link
                   key={item.key}
                   to={item.to}
                   aria-current={isActive ? "page" : undefined}
+                  title={collapsed ? item.label : undefined}
                 >
                   {inner}
                 </Link>
               );
+              if (collapsed) {
+                return (
+                  <Tooltip key={item.key}>
+                    <TooltipTrigger asChild>{link}</TooltipTrigger>
+                    <TooltipContent side="right">{item.label}</TooltipContent>
+                  </Tooltip>
+                );
+              }
+              return link;
             })}
           </div>
         </div>
@@ -182,6 +240,21 @@ function NavBlock() {
 }
 
 function FooterBlock() {
+  const { collapsed, toggle } = useContext(SidebarCollapseCtx);
+  if (collapsed) {
+    return (
+      <div className="border-t border-sidebar-border p-2">
+        <button
+          type="button"
+          onClick={toggle}
+          aria-label="Expand sidebar"
+          className="grid h-8 w-full place-items-center rounded-md text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+        >
+          <ChevronsRight className="h-4 w-4" aria-hidden />
+        </button>
+      </div>
+    );
+  }
   return (
     <div className="border-t border-sidebar-border p-3 text-xs text-sidebar-foreground/60">
       <div className="flex items-center gap-1.5">
