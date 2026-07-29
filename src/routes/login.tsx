@@ -1,7 +1,7 @@
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
-import { Eye, EyeOff, Plug } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 
 import { login, isAuthenticated } from "@/lib/auth";
 import { ApiError } from "@/lib/apiClient";
@@ -69,21 +69,29 @@ function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-background px-4 py-10">
+    <div
+      className="flex min-h-dvh items-center justify-center px-4 py-10"
+      style={{
+        backgroundImage:
+          "linear-gradient(160deg, #10192A 0%, #1B2A44 60%, #21355A 100%)",
+      }}
+    >
       <div className="w-full max-w-sm">
-        <div className="mb-6 flex items-center gap-2">
-          <div className="grid h-9 w-9 place-items-center rounded-md bg-sidebar text-sidebar-primary-foreground">
-            <Plug className="h-4 w-4" aria-hidden />
+        <div className="mb-6 flex items-center justify-center gap-3">
+          <div className="grid h-10 w-10 place-items-center rounded-md bg-primary text-primary-foreground text-lg font-bold shadow-lg">
+            E
           </div>
-          <div className="leading-tight">
-            <div className="text-sm font-semibold">ERAP</div>
-            <div className="text-[11px] text-muted-foreground">Remote Admin Console</div>
+          <div className="leading-tight text-left">
+            <div className="text-lg font-bold tracking-wide text-white">ERAP</div>
+            <div className="text-[11px] text-white/60">
+              Enterprise Remote Administration Platform
+            </div>
           </div>
         </div>
-        <div className="rounded-lg border bg-card p-6 shadow-sm">
-          <h1 className="text-lg font-semibold">Sign in</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Use your enterprise credentials to access the console.
+        <div className="rounded-xl border border-white/5 bg-card p-7 shadow-2xl">
+          <h1 className="text-base font-semibold">Sign in</h1>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Authorized IT personnel only. All activity is logged.
           </p>
           <form onSubmit={handleSubmit} className="mt-5 space-y-4" noValidate>
             <div className="space-y-1.5">
@@ -148,8 +156,8 @@ function LoginPage() {
             </Button>
           </form>
         </div>
-        <p className="mt-4 text-center text-[11px] text-muted-foreground">
-          Private WAN · Authorized personnel only
+        <p className="mt-4 text-center font-mono text-[11px] text-white/40">
+          v2.5 · private WAN · sessions brokered via RustDesk
         </p>
       </div>
     </div>

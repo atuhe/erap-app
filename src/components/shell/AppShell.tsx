@@ -110,13 +110,13 @@ function DesktopSidebar() {
 
 function BrandBlock() {
   return (
-    <div className="flex h-14 items-center gap-2 border-b border-sidebar-border px-4">
-      <div className="grid h-8 w-8 place-items-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground">
-        <Plug className="h-4 w-4" aria-hidden />
+    <div className="flex h-14 items-center gap-2.5 border-b border-sidebar-border px-4">
+      <div className="grid h-8 w-8 place-items-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground font-bold text-sm tracking-tight shadow-sm">
+        E
       </div>
       <div className="leading-tight">
-        <div className="text-sm font-semibold">ERAP</div>
-        <div className="text-[11px] text-sidebar-foreground/60">Remote Admin Console</div>
+        <div className="text-sm font-semibold tracking-wide text-sidebar-foreground">ERAP</div>
+        <div className="text-[10px] uppercase tracking-wider text-sidebar-foreground/50">Remote Administration</div>
       </div>
     </div>
   );
@@ -140,12 +140,12 @@ function NavBlock() {
               const inner = (
                 <span
                   className={cn(
-                    "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+                    "flex items-center gap-3 rounded-md border-l-[3px] px-3 py-2 text-sm transition-colors",
                     isActive
-                      ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                      ? "border-sidebar-primary bg-sidebar-accent text-sidebar-accent-foreground font-semibold"
                       : disabled
-                        ? "cursor-not-allowed text-sidebar-foreground/40"
-                        : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                        ? "cursor-not-allowed border-transparent text-sidebar-foreground/40"
+                        : "border-transparent text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
                   )}
                 >
                   <Icon className="h-4 w-4" aria-hidden />
