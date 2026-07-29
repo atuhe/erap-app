@@ -38,10 +38,10 @@ import { PageHeader } from "@/components/ui-ext/PageHeader";
 const CURRENT_USER = getProfile()?.username ?? "admin";
 
 export function SessionsModule() {
-  const [role, setRole] = useState<ErapRole>("system_admin");
+  const [role, setRole] = useState<ErapRole>("Administrator");
   const [tab, setTab] = useState<"active" | "history">("active");
   const [reconnectDevice, setReconnectDevice] = useState<ConnectTarget | null>(null);
-  const isAdmin = role === "system_admin" || role === "regional_admin";
+  const isAdmin = role === "Administrator" || role === "Supervisor";
 
   useEffect(() => {
     if (!isAdmin && tab === "active") setTab("history");
@@ -170,7 +170,7 @@ function ActiveSessionsView({ role, onReconnect }: { role: ErapRole; onReconnect
     () => all.filter((s) => s.status === "connected" || s.status === "awaiting_approval" || s.status === "requesting"),
     [all],
   );
-  const canTerminate = hasPermission(role, "force_disconnect") || role === "system_admin" || role === "regional_admin";
+  const canTerminate = hasPermission(role, "force_disconnect") || role === "Administrator" || role === "Supervisor";
 
   const kpi = {
     total: active.length,

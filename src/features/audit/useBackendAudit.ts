@@ -21,7 +21,7 @@ function toAuditEntry(d: AuditLogDto): AuditEntry {
     id: `AUD-${d.auditId}`,
     ts: Date.parse(d.createdAt),
     actor: d.actor ?? "system",
-    actorRole: "system_admin",       // sessions/audit don't store the actor's role yet
+    actorRole: "Administrator",       // sessions/audit don't store the actor's role yet
     category: toCategory(d.category),
     action: d.action,
     target: d.target ?? undefined,

@@ -92,7 +92,7 @@ const NAV: { key: string; label: string; icon: typeof LayoutDashboard; perm?: Pe
 
 export function DeviceManagement() {
   const [active, setActive] = useState("devices");
-  const [role, setRole] = useState<ErapRole>("system_admin");
+  const [role, setRole] = useState<ErapRole>("Administrator");
   const [q, setQ] = useState("");
   const [branch, setBranch] = useState("all");
   const [department, setDepartment] = useState("all");

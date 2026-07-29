@@ -67,8 +67,8 @@ export function evaluateUnattendedPolicy(input: EvaluateInput): UnattendedPolicy
   }
 
   const privileged =
-    role === "system_admin" ||
-    role === "regional_admin" ||
+    role === "Administrator" ||
+    role === "Supervisor" ||
     hasPermission(role, "manage_policies");
 
   if (!privileged) {

@@ -99,39 +99,39 @@ function mk(
 function seed(): SessionRecord[] {
   return [
     mk(6, 0, {
-      technician: "Sara Patel", technicianRole: "senior_engineer",
+      technician: "Sara Patel", technicianRole: "Support Officer",
       deviceId: "DEV-10244", hostname: "SFO-DES-MB08", currentUser: "j.nguyen",
       branch: "San Francisco", department: "Design",
       reason: "Adobe Suite license reset", mode: "approval",
       result: undefined,
     }, "connected"),
     mk(22, 0, {
-      technician: "Rafa Silva", technicianRole: "support_tech",
+      technician: "Rafa Silva", technicianRole: "Support Officer",
       deviceId: "DEV-10246", hostname: "NYC-ENG-WS31", currentUser: "r.silva",
       branch: "New York", department: "Engineering",
       reason: "Push VPN config profile", mode: "unattended",
     }, "connected"),
     mk(85, 27, {
-      technician: "Alex Morgan", technicianRole: "system_admin",
+      technician: "Alex Morgan", technicianRole: "Administrator",
       deviceId: "DEV-10241", hostname: "NYC-FIN-WS01", currentUser: "a.morgan",
       branch: "New York", department: "Finance",
       reason: "Install printer drivers", mode: "approval", result: "Completed",
     }),
     mk(210, 12, {
-      technician: "Alex Morgan", technicianRole: "system_admin",
+      technician: "Alex Morgan", technicianRole: "Administrator",
       deviceId: "DEV-10247", hostname: "LON-FIN-LT02", currentUser: "e.brown",
       branch: "London", department: "Finance",
       reason: "Outlook profile rebuild", mode: "approval", result: "Completed",
     }),
     mk(360, 4, {
-      technician: "Alex Morgan", technicianRole: "system_admin",
+      technician: "Alex Morgan", technicianRole: "Administrator",
       deviceId: "DEV-10249", hostname: "SFO-OPS-WS17", currentUser: "l.chen",
       branch: "San Francisco", department: "Operations",
       reason: "Investigate slow logon", mode: "approval", result: "Cancelled",
       failure: "Remote user declined the request",
     }, "cancelled"),
     mk(1440, 18, {
-      technician: "Karl Mueller", technicianRole: "auditor",
+      technician: "Karl Mueller", technicianRole: "Viewer",
       deviceId: "DEV-10248", hostname: "BER-HR-WS10", currentUser: "k.mueller",
       branch: "Berlin", department: "HR",
       reason: "Compliance evidence review", mode: "approval", result: "Completed",

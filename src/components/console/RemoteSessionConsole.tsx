@@ -157,7 +157,7 @@ const STATUS_STYLE: Record<SessionStatus, string> = {
 
 type View = "dashboard" | "start" | "live" | "history" | "incident" | "audit";
 
-const CURRENT_ROLE: ErapRole = "senior_engineer";
+const CURRENT_ROLE: ErapRole = "Support Officer";
 const CURRENT_TECH = "Alex Morgan";
 
 export function RemoteSessionConsole() {

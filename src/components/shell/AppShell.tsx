@@ -32,7 +32,7 @@ import { cn } from "@/lib/utils";
 // Cross-module role selector — module-scope state, so every route sees the
 // same role. Keeps the polish scope demo-friendly without introducing a global
 // store.
-let currentRole: ErapRole = "system_admin";
+let currentRole: ErapRole = "Administrator";
 const roleListeners = new Set<(r: ErapRole) => void>();
 export function getRole() {
   return currentRole;

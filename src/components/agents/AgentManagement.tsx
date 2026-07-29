@@ -325,7 +325,7 @@ const NAV = [
 // ────────────────────────────────────────────────────────────────────────────
 
 export function AgentManagement() {
-  const [role, setRole] = useState<ErapRole>("system_admin");
+  const [role, setRole] = useState<ErapRole>("Administrator");
   const [tab, setTab] = useState("dashboard");
   const [wizardOpen, setWizardOpen] = useState(false);
 

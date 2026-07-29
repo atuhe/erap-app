@@ -41,14 +41,14 @@ function seed(): AuditEntry[] {
     ...e,
   });
   return [
-    mk(4, { actor: "Alex Morgan", actorRole: "system_admin", category: "user", action: "view_user", target: "Sara Patel", targetId: "U-1002", status: "info", details: "Opened profile" }),
-    mk(18, { actor: "Sara Patel", actorRole: "regional_admin", category: "role", action: "role_change", target: "Jamie Nguyen", targetId: "U-1004", status: "success", details: "support_tech → senior_engineer" }),
-    mk(55, { actor: "Alex Morgan", actorRole: "system_admin", category: "user", action: "reset_password", target: "Yuki Tanaka", targetId: "U-1005", status: "success", details: "Reset link emailed" }),
-    mk(90, { actor: "Karl Mueller", actorRole: "auditor", category: "session", action: "connect_attempt", target: "NYC-FIN-WS01", targetId: "DEV-10241", status: "denied", details: "Role lacks Remote Desktop permission" }),
-    mk(140, { actor: "Alex Morgan", actorRole: "system_admin", category: "mfa", action: "mfa_enabled", target: "Emma Brown", targetId: "U-1007", status: "success", details: "Enrollment queued" }),
-    mk(220, { actor: "Sara Patel", actorRole: "regional_admin", category: "user", action: "unlock_account", target: "Yuki Tanaka", targetId: "U-1005", status: "success" }),
-    mk(310, { actor: "Alex Morgan", actorRole: "system_admin", category: "policy", action: "policy_update", target: "Approval Policies", status: "success", details: "After-hours approval enabled" }),
-    mk(600, { actor: "Lin Chen", actorRole: "regional_admin", category: "user", action: "disable_account", target: "Lin Chen", targetId: "U-1009", status: "success", details: "Off-boarded" }),
+    mk(4, { actor: "Alex Morgan", actorRole: "Administrator", category: "user", action: "view_user", target: "Sara Patel", targetId: "U-1002", status: "info", details: "Opened profile" }),
+    mk(18, { actor: "Sara Patel", actorRole: "Supervisor", category: "role", action: "role_change", target: "Jamie Nguyen", targetId: "U-1004", status: "success", details: "support_tech → senior_engineer" }),
+    mk(55, { actor: "Alex Morgan", actorRole: "Administrator", category: "user", action: "reset_password", target: "Yuki Tanaka", targetId: "U-1005", status: "success", details: "Reset link emailed" }),
+    mk(90, { actor: "Karl Mueller", actorRole: "Viewer", category: "session", action: "connect_attempt", target: "NYC-FIN-WS01", targetId: "DEV-10241", status: "denied", details: "Role lacks Remote Desktop permission" }),
+    mk(140, { actor: "Alex Morgan", actorRole: "Administrator", category: "mfa", action: "mfa_enabled", target: "Emma Brown", targetId: "U-1007", status: "success", details: "Enrollment queued" }),
+    mk(220, { actor: "Sara Patel", actorRole: "Supervisor", category: "user", action: "unlock_account", target: "Yuki Tanaka", targetId: "U-1005", status: "success" }),
+    mk(310, { actor: "Alex Morgan", actorRole: "Administrator", category: "policy", action: "policy_update", target: "Approval Policies", status: "success", details: "After-hours approval enabled" }),
+    mk(600, { actor: "Lin Chen", actorRole: "Supervisor", category: "user", action: "disable_account", target: "Lin Chen", targetId: "U-1009", status: "success", details: "Off-boarded" }),
   ].filter(Boolean) as AuditEntry[];
 }
 

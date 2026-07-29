@@ -20,7 +20,7 @@ function toSessionRecord(d: SessionSummary): SessionRecord {
   return {
     id: d.sessionId,
     technician: d.technicianUsername,
-    technicianRole: "system_admin",   // sessions don't store the role yet
+    technicianRole: "Administrator",   // sessions don't store the role yet
     deviceId: `DEV-${d.deviceId}`,
     hostname: d.hostname,
     currentUser: "—",                 // not captured on the session record

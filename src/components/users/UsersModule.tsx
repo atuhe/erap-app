@@ -63,47 +63,15 @@ import {
   PERMISSION_LABELS, Permission, ROLE_NAV, hasPermission,
 } from "@/lib/erap-roles";
 import { logAudit } from "@/lib/audit-log";
+import { useBackendUsers, type AppUser } from "@/features/users/useBackendUsers";
 import { AuditLogView } from "@/components/audit/AuditLogView";
 
 type Status = "active" | "disabled" | "locked";
 
-interface AppUser {
-  id: string;
-  fullName: string;
-  username: string;
-  employeeNo: string;
-  email: string;
-  phone: string;
-  role: ErapRole;
-  branch: string;
-  department: string;
-  position: string;
-  supervisor: string;
-  status: Status;
-  lastLogin: string;
-  createdAt: string;
-  passwordChanged: string;
-  mfa: boolean;
-  online: boolean;
-}
 
 const BRANCHES = ["New York", "London", "Berlin", "San Francisco", "Tokyo", "Singapore"];
 const DEPARTMENTS = ["IT Operations", "Finance", "HR", "Engineering", "Design", "Legal", "Support"];
 
-const USERS: AppUser[] = [
-  { id: "U-1001", fullName: "Alex Morgan", username: "a.morgan", employeeNo: "E-24011", email: "alex.morgan@corp.gov", phone: "+1 212 555 0132", role: "system_admin", branch: "New York", department: "IT Operations", position: "Platform Owner", supervisor: "—", status: "active", lastLogin: "2 min ago", createdAt: "2023-04-11", passwordChanged: "2026-06-02", mfa: true, online: true },
-  { id: "U-1002", fullName: "Sara Patel", username: "s.patel", employeeNo: "E-24102", email: "sara.patel@corp.gov", phone: "+44 20 7946 1122", role: "regional_admin", branch: "London", department: "IT Operations", position: "EMEA Admin", supervisor: "Alex Morgan", status: "active", lastLogin: "12 min ago", createdAt: "2023-08-19", passwordChanged: "2026-05-14", mfa: true, online: true },
-  { id: "U-1003", fullName: "Marcus Klein", username: "m.klein", employeeNo: "E-24215", email: "marcus.klein@corp.gov", phone: "+49 30 5510 8842", role: "senior_engineer", branch: "Berlin", department: "Support", position: "L3 Engineer", supervisor: "Sara Patel", status: "active", lastLogin: "1 h ago", createdAt: "2024-01-07", passwordChanged: "2026-04-30", mfa: true, online: false },
-  { id: "U-1004", fullName: "Jamie Nguyen", username: "j.nguyen", employeeNo: "E-24330", email: "jamie.nguyen@corp.gov", phone: "+1 415 555 0198", role: "support_tech", branch: "San Francisco", department: "Support", position: "L2 Technician", supervisor: "Marcus Klein", status: "active", lastLogin: "5 min ago", createdAt: "2024-03-22", passwordChanged: "2026-07-01", mfa: false, online: true },
-  { id: "U-1005", fullName: "Yuki Tanaka", username: "y.tanaka", employeeNo: "E-24441", email: "yuki.tanaka@corp.gov", phone: "+81 3 5510 4421", role: "support_tech", branch: "Tokyo", department: "Support", position: "L1 Technician", supervisor: "Marcus Klein", status: "locked", lastLogin: "3 d ago", createdAt: "2024-05-02", passwordChanged: "2026-02-18", mfa: false, online: false },
-  { id: "U-1006", fullName: "Rafael Silva", username: "r.silva", employeeNo: "E-24522", email: "rafael.silva@corp.gov", phone: "+1 212 555 0177", role: "senior_engineer", branch: "New York", department: "Engineering", position: "L3 Engineer", supervisor: "Alex Morgan", status: "active", lastLogin: "just now", createdAt: "2023-11-14", passwordChanged: "2026-06-21", mfa: true, online: true },
-  { id: "U-1007", fullName: "Emma Brown", username: "e.brown", employeeNo: "E-24601", email: "emma.brown@corp.gov", phone: "+44 20 7946 3390", role: "helpdesk", branch: "London", department: "Finance", position: "Help Desk", supervisor: "Sara Patel", status: "active", lastLogin: "35 min ago", createdAt: "2024-06-11", passwordChanged: "2026-05-05", mfa: false, online: true },
-  { id: "U-1008", fullName: "Karl Mueller", username: "k.mueller", employeeNo: "E-24712", email: "karl.mueller@corp.gov", phone: "+49 30 5510 2201", role: "auditor", branch: "Berlin", department: "Legal", position: "Compliance Auditor", supervisor: "Sara Patel", status: "active", lastLogin: "yesterday", createdAt: "2024-02-27", passwordChanged: "2026-03-11", mfa: true, online: false },
-  { id: "U-1009", fullName: "Lin Chen", username: "l.chen", employeeNo: "E-24803", email: "lin.chen@corp.gov", phone: "+1 415 555 0142", role: "regional_admin", branch: "San Francisco", department: "IT Operations", position: "AMER Admin", supervisor: "Alex Morgan", status: "disabled", lastLogin: "2 w ago", createdAt: "2023-09-30", passwordChanged: "2025-12-18", mfa: true, online: false },
-  { id: "U-1010", fullName: "Hana Sato", username: "h.sato", employeeNo: "E-24904", email: "hana.sato@corp.gov", phone: "+81 3 5510 7788", role: "support_tech", branch: "Tokyo", department: "Design", position: "L1 Technician", supervisor: "Marcus Klein", status: "active", lastLogin: "just now", createdAt: "2024-07-16", passwordChanged: "2026-07-10", mfa: false, online: true },
-  { id: "U-1011", fullName: "Priya Shah", username: "p.shah", employeeNo: "E-25011", email: "priya.shah@corp.gov", phone: "+65 6555 4412", role: "helpdesk", branch: "Singapore", department: "Support", position: "Help Desk", supervisor: "Alex Morgan", status: "active", lastLogin: "18 min ago", createdAt: "2025-01-08", passwordChanged: "2026-05-20", mfa: false, online: true },
-  { id: "U-1012", fullName: "Noah Fischer", username: "n.fischer", employeeNo: "E-25102", email: "noah.fischer@corp.gov", phone: "+49 30 5510 9987", role: "auditor", branch: "Berlin", department: "Legal", position: "Sr. Auditor", supervisor: "Karl Mueller", status: "active", lastLogin: "4 h ago", createdAt: "2024-10-04", passwordChanged: "2026-06-30", mfa: true, online: false },
-];
 
 // ---------- Shell ----------
 
@@ -123,7 +91,7 @@ const NAV_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
 };
 
 export function UsersModule() {
-  const [role, setRole] = useState<ErapRole>("system_admin");
+  const [role, setRole] = useState<ErapRole>("Administrator");
   const [tab, setTab] = useState("dashboard");
   const canManageUsers = hasPermission(role, "manage_users");
   const canManageRoles = hasPermission(role, "manage_roles");
@@ -250,11 +218,12 @@ export function UsersModule() {
 // ---------- Dashboard ----------
 
 function DashboardTab() {
-  const total = USERS.length;
-  const onlineTech = USERS.filter((u) => u.online && (u.role === "support_tech" || u.role === "senior_engineer")).length;
-  const admins = USERS.filter((u) => u.role === "system_admin" || u.role === "regional_admin").length;
-  const locked = USERS.filter((u) => u.status === "locked").length;
-  const disabled = USERS.filter((u) => u.status === "disabled").length;
+  const users = useBackendUsers();
+  const total = users.length;
+  const onlineTech = users.filter((u) => u.online && u.role === "Support Officer").length;
+  const admins = users.filter((u) => u.role === "Administrator" || u.role === "Supervisor").length;
+  const locked = users.filter((u) => u.status === "locked").length;
+  const disabled = users.filter((u) => u.status === "disabled").length;
 
   const kpis = [
     { label: "Total Users", value: total, icon: UsersIcon, tone: "text-primary" },
@@ -289,6 +258,7 @@ function DashboardTab() {
 // ---------- Users ----------
 
 function UsersTab({ canManage, viewerRole, viewerName }: { canManage: boolean; viewerRole: ErapRole; viewerName: string }) {
+  const users = useBackendUsers();
   const [q, setQ] = useState("");
   const [fRole, setFRole] = useState("all");
   const [fBranch, setFBranch] = useState("all");
@@ -297,7 +267,7 @@ function UsersTab({ canManage, viewerRole, viewerName }: { canManage: boolean; v
   const [detail, setDetail] = useState<AppUser | null>(null);
   const [assign, setAssign] = useState<AppUser | null>(null);
   const [mfaMap, setMfaMap] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(USERS.map((u) => [u.id, u.mfa])),
+    Object.fromEntries(users.map((u) => [u.id, u.mfa])),
   );
 
   const audit = (
@@ -346,7 +316,7 @@ function UsersTab({ canManage, viewerRole, viewerName }: { canManage: boolean; v
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
-    return USERS.filter((u) => {
+    return users.filter((u) => {
       if (fRole !== "all" && u.role !== fRole) return false;
       if (fBranch !== "all" && u.branch !== fBranch) return false;
       if (fDept !== "all" && u.department !== fDept) return false;
@@ -400,7 +370,7 @@ function UsersTab({ canManage, viewerRole, viewerName }: { canManage: boolean; v
                 <SelectItem value="disabled">Disabled</SelectItem>
               </SelectContent>
             </Select>
-            <div className="ml-auto text-xs text-muted-foreground">{filtered.length} of {USERS.length} users</div>
+            <div className="ml-auto text-xs text-muted-foreground">{filtered.length} of {users.length} users</div>
           </div>
         </CardContent>
       </Card>
@@ -510,12 +480,10 @@ function StatusBadge({ status }: { status: Status }) {
 
 function RoleBadge({ role }: { role: ErapRole }) {
   const tones: Record<ErapRole, string> = {
-    system_admin: "bg-primary/10 text-primary",
-    regional_admin: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
-    senior_engineer: "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400",
-    support_tech: "bg-slate-500/10 text-slate-700 dark:text-slate-300",
-    helpdesk: "bg-cyan-500/10 text-cyan-700 dark:text-cyan-400",
-    auditor: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+    "Administrator": "bg-primary/10 text-primary",
+    "Supervisor": "bg-blue-500/10 text-blue-700 dark:text-blue-400",
+    "Support Officer": "bg-slate-500/10 text-slate-700 dark:text-slate-300",
+    "Viewer": "bg-amber-500/10 text-amber-700 dark:text-amber-400",
   };
   return <Badge variant="outline" className={cn("border-transparent font-medium", tones[role])}>{ROLE_LABELS[role]}</Badge>;
 }
@@ -651,13 +619,13 @@ function Field({ label, value, mono }: { label: string; value: React.ReactNode; 
 // ---------- Assign Role Dialog ----------
 
 function AssignRoleDialog({ user, onClose, viewerRole, viewerName }: { user: AppUser | null; onClose: () => void; viewerRole: ErapRole; viewerName: string }) {
-  const [newRole, setNewRole] = useState<ErapRole>("support_tech");
+  const [newRole, setNewRole] = useState<ErapRole>("Support Officer");
   const [branch, setBranch] = useState("New York");
   const [dept, setDept] = useState("Support");
   const [perms, setPerms] = useState({
     unattended: false, fileTransfer: true, clipboard: true, restart: false, shutdown: false, forceDisc: false,
   });
-  const canSave = viewerRole === "system_admin" || viewerRole === "regional_admin";
+  const canSave = viewerRole === "Administrator" || viewerRole === "Supervisor";
 
   return (
     <Dialog open={!!user} onOpenChange={(o) => !o && onClose()}>
@@ -784,7 +752,7 @@ function RolesTab({ canManage }: { canManage: boolean }) {
                 <Badge key={p} variant="secondary" className="font-normal">{PERMISSION_LABELS[p]}</Badge>
               ))}
             </div>
-            {r === "auditor" && (
+            {r === "Viewer" && (
               <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-2 text-xs text-amber-700 dark:text-amber-400">
                 <ShieldAlert className="mt-0.5 h-3.5 w-3.5" />
                 Cannot initiate remote desktop sessions.
