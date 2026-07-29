@@ -352,6 +352,7 @@ function ConsoleTopBar({ view, onStart }: { view: View; onStart: () => void }) {
         </div>
         <Button size="sm" variant="outline" className="gap-1"><Bell className="h-3.5 w-3.5" /> 3</Button>
         <Button size="sm" className="gap-1" onClick={onStart}><Play className="h-3.5 w-3.5" /> Start session</Button>
+        <AccountBadge />
       </div>
     </header>
   );
