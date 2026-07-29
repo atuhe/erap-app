@@ -63,6 +63,8 @@ import {
   PERMISSION_LABELS, Permission, ROLE_NAV, hasPermission,
 } from "@/lib/erap-roles";
 import { logAudit } from "@/lib/audit-log";
+import { getViewerName } from "@/lib/auth";
+import { AccountBadge } from "@/components/shell/AccountBadge";
 import { useBackendUsers, type AppUser } from "@/features/users/useBackendUsers";
 import { AuditLogView } from "@/components/audit/AuditLogView";
 
@@ -98,7 +100,7 @@ export function UsersModule() {
   const canManagePolicies = hasPermission(role, "manage_policies");
   const canViewAudit = hasPermission(role, "view_audit");
   const canExportReports = hasPermission(role, "export_reports");
-  const viewerName = "Alex Morgan";
+  const viewerName = getViewerName();
 
   const pathname = useRouterState({ select: (r) => r.location.pathname });
   const nav = ROLE_NAV[role];
@@ -166,11 +168,7 @@ export function UsersModule() {
               <Button variant="ghost" size="icon" aria-label="Notifications">
                 <Bell className="h-4 w-4" />
               </Button>
-              <div className="flex items-center gap-2 rounded-md border px-2 py-1 text-xs">
-                <div className="grid h-6 w-6 place-items-center rounded-full bg-primary text-primary-foreground text-[10px] font-semibold">AM</div>
-                <span className="hidden sm:inline">Alex Morgan</span>
-                <ChevronDown className="h-3 w-3 text-muted-foreground" />
-              </div>
+              <AccountBadge />
             </div>
           </header>
 

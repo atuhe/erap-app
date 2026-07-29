@@ -78,3 +78,16 @@ export function isAuthenticated(): boolean {
 export function hasPermission(permission: string): boolean {
   return getProfile()?.permissions.includes(permission) ?? false;
 }
+
+/** Display name for the signed-in user — used for audit actors and UI chips. */
+export function getViewerName(): string {
+  const p = getProfile();
+  return p?.fullName || p?.username || "Signed-in User";
+}
+
+/** Uppercase initials (up to 2 chars) derived from the display name. */
+export function getViewerInitials(): string {
+  const name = getViewerName();
+  const parts = name.match(/\b[\p{L}\p{N}]/gu) ?? ["U"];
+  return parts.slice(0, 2).join("").toUpperCase();
+}
