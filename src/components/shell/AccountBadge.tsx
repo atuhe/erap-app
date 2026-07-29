@@ -2,7 +2,7 @@ import { ChevronDown, LogOut, User as UserIcon } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 
-import { getProfile, getViewerInitials, getViewerName, logout } from "@/lib/auth";
+import { logout, useAuth } from "@/lib/auth";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,9 +19,9 @@ import {
  */
 export function AccountBadge() {
   const navigate = useNavigate();
-  const profile = getProfile();
-  const name = getViewerName();
-  const initials = getViewerInitials();
+  const { profile, viewerName: name, viewerInitials: initials, isAuthenticated } = useAuth();
+
+  if (!isAuthenticated) return null;
 
   function handleSignOut() {
     logout();
