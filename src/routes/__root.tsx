@@ -14,7 +14,9 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { isAuthenticated } from "../lib/auth";
+import { startSessionTimeoutWatcher, onSessionTimeoutEvent, markActivity } from "../lib/session-timeout";
 import { Toaster } from "@/components/ui/sonner";
+import { toast } from "sonner";
 import { ErrorState } from "@/components/ui-ext/ErrorState";
 import { EmptyState } from "@/components/ui-ext/EmptyState";
 import { Button } from "@/components/ui/button";
@@ -136,6 +138,27 @@ function RootComponent() {
     window.addEventListener("erap:unauthorized", onUnauthorized);
     return () => window.removeEventListener("erap:unauthorized", onUnauthorized);
   }, [navigate]);
+
+  // Idle-based session timeout: warn near expiry, hard-logout on expiry.
+  useEffect(() => {
+    const stopWatcher = startSessionTimeoutWatcher();
+    const off = onSessionTimeoutEvent((kind) => {
+      if (kind === "warn") {
+        toast.warning("You'll be signed out soon", {
+          id: "erap-idle-warn",
+          description: "Your session is about to expire due to inactivity. Move your mouse or press a key to stay signed in.",
+          duration: 60_000,
+          action: { label: "Stay signed in", onClick: () => markActivity() },
+        });
+      } else {
+        toast.dismiss("erap-idle-warn");
+        toast.error("Signed out due to inactivity", {
+          description: "Please sign in again to continue.",
+        });
+      }
+    });
+    return () => { off(); stopWatcher(); };
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
