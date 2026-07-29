@@ -1,5 +1,25 @@
 import { apiFetch, setToken, clearToken, PROFILE_KEY } from "./apiClient";
 
+// Demo credentials — lets the app be used without the ERAP backend running.
+// Any request against `admin` / `Admin@123` resolves locally with a full
+// permission set. All other credentials still hit the real backend.
+const DEMO_USERNAME = "admin";
+const DEMO_PASSWORD = "Admin@123";
+const DEMO_TOKEN = "demo.local.session";
+const DEMO_PROFILE: Profile = {
+  username: "admin",
+  fullName: "Administrator",
+  roles: ["Administrator", "System Administrator"],
+  permissions: [
+    "devices.view",
+    "devices.manage",
+    "sessions.start",
+    "sessions.approve",
+    "audit.view",
+    "users.manage",
+  ],
+};
+
 export interface LoginResponse {
   token: string;
   username: string;
@@ -16,6 +36,13 @@ export interface Profile {
 }
 
 export async function login(username: string, password: string): Promise<Profile> {
+  // Demo shortcut — resolves before hitting the network.
+  if (username.trim().toLowerCase() === DEMO_USERNAME && password === DEMO_PASSWORD) {
+    setToken(DEMO_TOKEN);
+    sessionStorage.setItem(PROFILE_KEY, JSON.stringify(DEMO_PROFILE));
+    return DEMO_PROFILE;
+  }
+
   const result = await apiFetch<LoginResponse>("/api/auth/login", {
     method: "POST",
     body: JSON.stringify({ username, password }),
