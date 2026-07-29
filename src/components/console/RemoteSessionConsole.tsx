@@ -84,6 +84,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { ErapRole, ROLE_LABELS, hasPermission } from "@/lib/erap-roles";
+import { getViewerName } from "@/lib/auth";
+import { AccountBadge } from "@/components/shell/AccountBadge";
 import { logAudit } from "@/lib/audit-log";
 import { useNavigate } from "@tanstack/react-router";
 
@@ -158,7 +160,6 @@ const STATUS_STYLE: Record<SessionStatus, string> = {
 type View = "dashboard" | "start" | "live" | "history" | "incident" | "audit";
 
 const CURRENT_ROLE: ErapRole = "Support Officer";
-const CURRENT_TECH = "Alex Morgan";
 
 export function RemoteSessionConsole() {
   const navigate = useNavigate();
@@ -178,7 +179,7 @@ export function RemoteSessionConsole() {
     const row: SessionRow = {
       id,
       device,
-      technician: CURRENT_TECH,
+      technician: getViewerName(),
       type,
       startedAt: Date.now(),
       duration: "00:00:00",
@@ -186,7 +187,7 @@ export function RemoteSessionConsole() {
     };
     setSessions((s) => [row, ...s]);
     logAudit({
-      actor: CURRENT_TECH, actorRole: CURRENT_ROLE, category: "session",
+      actor: getViewerName(), actorRole: CURRENT_ROLE, category: "session",
       action: "session_started", target: device.hostname, targetId: device.id,
       status: "success", details: `${type} session via ERAP secure channel`,
     });
@@ -213,7 +214,7 @@ export function RemoteSessionConsole() {
               <LiveConsole session={activeSession} onEnd={(reason) => {
                 setSessions((rows) => rows.map((r) => r.id === activeSession.id ? { ...r, status: "Terminated" } : r));
                 logAudit({
-                  actor: CURRENT_TECH, actorRole: CURRENT_ROLE, category: "session",
+                  actor: getViewerName(), actorRole: CURRENT_ROLE, category: "session",
                   action: "session_ended", target: activeSession.device.hostname, targetId: activeSession.device.id,
                   status: "info", details: reason,
                 });
@@ -289,7 +290,7 @@ function ConsoleSidebar({
           <Siren className="h-4 w-4" /> Emergency Access
         </Button>
         <div className="mt-2 rounded-md border border-slate-800 bg-slate-900/60 p-2 text-[11px] text-slate-400">
-          Signed in as <span className="text-slate-200">{CURRENT_TECH}</span><br />
+          Signed in as <span className="text-slate-200">{getViewerName()}</span><br />
           <span className="text-slate-500">{ROLE_LABELS[CURRENT_ROLE]}</span>
         </div>
       </div>
@@ -351,6 +352,7 @@ function ConsoleTopBar({ view, onStart }: { view: View; onStart: () => void }) {
         </div>
         <Button size="sm" variant="outline" className="gap-1"><Bell className="h-3.5 w-3.5" /> 3</Button>
         <Button size="sm" className="gap-1" onClick={onStart}><Play className="h-3.5 w-3.5" /> Start session</Button>
+        <AccountBadge />
       </div>
     </header>
   );
@@ -559,7 +561,7 @@ function StartSessionWizard({ open, onOpenChange, onComplete }: { open: boolean;
               <div className="rounded-md border p-3 text-sm">
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="font-medium">{CURRENT_TECH}</div>
+                    <div className="font-medium">{getViewerName()}</div>
                     <div className="text-xs text-slate-500">{ROLE_LABELS[CURRENT_ROLE]}</div>
                   </div>
                   <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">Role verified</Badge>
@@ -976,7 +978,7 @@ function SessionChat({ sessionId }: { sessionId: string }) {
   const send = () => {
     if (!text.trim()) return;
     setMsgs((m) => [...m, { from: "tech", text: text.trim(), ts: Date.now(), status: "sent" }]);
-    logAudit({ actor: CURRENT_TECH, actorRole: CURRENT_ROLE, category: "session", action: "chat_message", target: sessionId, status: "info" });
+    logAudit({ actor: getViewerName(), actorRole: CURRENT_ROLE, category: "session", action: "chat_message", target: sessionId, status: "info" });
     setText("");
   };
   return (
@@ -1053,7 +1055,7 @@ function TerminalDrawer({ onClose }: { onClose: () => void }) {
     const cmd = input.trim();
     const out = simulateCmd(cmd);
     setLines((l) => [...l.slice(0, -1), `C:\\Windows\\System32> ${cmd}`, ...out, "C:\\Windows\\System32>"]);
-    logAudit({ actor: CURRENT_TECH, actorRole: CURRENT_ROLE, category: "session", action: "terminal_command", target: cmd, status: "info" });
+    logAudit({ actor: getViewerName(), actorRole: CURRENT_ROLE, category: "session", action: "terminal_command", target: cmd, status: "info" });
     setInput("");
   };
   return (
@@ -1096,7 +1098,7 @@ function FileTransferDrawer({ device, onClose }: { device: ConsoleDevice; onClos
     const id = `T${transfers.length + 1}`;
     const name = direction === "up" ? "diag-toolkit.zip" : "system-report.txt";
     setTransfers((t) => [{ id, name, direction, size: "1.2 MB", progress: 0, scan: "pending" }, ...t]);
-    logAudit({ actor: CURRENT_TECH, actorRole: CURRENT_ROLE, category: "session", action: direction === "up" ? "file_upload" : "file_download", target: name, targetId: device.id, status: "info" });
+    logAudit({ actor: getViewerName(), actorRole: CURRENT_ROLE, category: "session", action: direction === "up" ? "file_upload" : "file_download", target: name, targetId: device.id, status: "info" });
     let p = 0;
     const iv = setInterval(() => {
       p += 20;
@@ -1356,7 +1358,7 @@ function EmergencyDialog({ open, onOpenChange, onGranted }: { open: boolean; onO
   const [expires, setExpires] = useState("30");
   const submit = () => {
     const dev = DEVICES.find((d) => d.id === device)!;
-    logAudit({ actor: CURRENT_TECH, actorRole: CURRENT_ROLE, category: "session", action: "emergency_access_granted", target: dev.hostname, targetId: dev.id, status: "success", details: `Approver: ${approver}, expires in ${expires}m — ${reason || "critical incident"}` });
+    logAudit({ actor: getViewerName(), actorRole: CURRENT_ROLE, category: "session", action: "emergency_access_granted", target: dev.hostname, targetId: dev.id, status: "success", details: `Approver: ${approver}, expires in ${expires}m — ${reason || "critical incident"}` });
     toast.success("Emergency access granted — session monitored");
     onGranted(dev);
   };

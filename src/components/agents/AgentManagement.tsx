@@ -72,6 +72,8 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { ErapRole, ROLE_LABELS, hasPermission } from "@/lib/erap-roles";
+import { getViewerName } from "@/lib/auth";
+import { AccountBadge } from "@/components/shell/AccountBadge";
 import { logAudit } from "@/lib/audit-log";
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -329,7 +331,7 @@ export function AgentManagement() {
   const [tab, setTab] = useState("dashboard");
   const [wizardOpen, setWizardOpen] = useState(false);
 
-  const viewerName = "Alex Morgan";
+  const viewerName = getViewerName();
   const canManage = hasPermission(role, "manage_policies") || hasPermission(role, "manage_users");
 
   return (
@@ -554,11 +556,7 @@ function TopBar({ role, setRole }: { role: ErapRole; setRole: (r: ErapRole) => v
         <Button variant="ghost" size="icon" aria-label="Notifications">
           <Bell className="h-4 w-4" />
         </Button>
-        <div className="flex items-center gap-2 rounded-md border px-2 py-1 text-xs">
-          <div className="grid h-6 w-6 place-items-center rounded-full bg-primary text-primary-foreground text-[10px] font-semibold">AM</div>
-          <span className="hidden sm:inline">Alex Morgan</span>
-          <ChevronDown className="h-3 w-3 text-muted-foreground" />
-        </div>
+        <AccountBadge />
       </div>
     </header>
   );
