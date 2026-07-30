@@ -38,7 +38,7 @@ import { PageHeader } from "@/components/ui-ext/PageHeader";
 const CURRENT_USER = getProfile()?.username ?? "admin";
 
 export function SessionsModule() {
-  const [role, setRole] = useState<ErapRole>("Administrator");
+  const [role] = useAppRole();
   const [tab, setTab] = useState<"active" | "history">("active");
   const [reconnectDevice, setReconnectDevice] = useState<ConnectTarget | null>(null);
   const isAdmin = role === "Administrator" || role === "Supervisor";
@@ -53,16 +53,7 @@ export function SessionsModule() {
         title="Remote Sessions"
         description="Live remote sessions and technician history."
         actions={
-          <Select value={role} onValueChange={(v) => setRole(v as ErapRole)}>
-            <SelectTrigger className="h-9 w-[200px]" aria-label="Active role">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {(Object.keys(ROLE_LABELS) as ErapRole[]).map((r) => (
-                <SelectItem key={r} value={r}>Role: {ROLE_LABELS[r]}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="hidden h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium text-muted-foreground sm:inline-flex" aria-label="Your role" title="Your assigned role"><span className="text-foreground">{ROLE_LABELS[role]}</span></div>
         }
       />
       <div className="flex min-h-0 flex-1 flex-col overflow-auto p-4">
@@ -144,14 +135,7 @@ function TopBar({ role, setRole }: { role: ErapRole; setRole: (r: ErapRole) => v
         <p className="text-[11px] text-muted-foreground">Live sessions and technician history across the private WAN</p>
       </div>
       <div className="ml-auto flex items-center gap-2">
-        <Select value={role} onValueChange={(v) => setRole(v as ErapRole)}>
-          <SelectTrigger className="h-9 w-[220px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {(Object.keys(ROLE_LABELS) as ErapRole[]).map((r) => (
-              <SelectItem key={r} value={r}>Role: {ROLE_LABELS[r]}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="hidden h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium text-muted-foreground sm:inline-flex" aria-label="Your role" title="Your assigned role"><span className="text-foreground">{ROLE_LABELS[role]}</span></div>
         <Button variant="ghost" size="icon" aria-label="Notifications"><Bell className="h-4 w-4" /></Button>
         <div className="flex items-center gap-2 rounded-md border px-2 py-1 text-xs">
           <div className="grid h-6 w-6 place-items-center rounded-full bg-primary text-primary-foreground text-[10px] font-semibold">AM</div>

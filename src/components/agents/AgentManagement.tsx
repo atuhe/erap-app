@@ -74,6 +74,7 @@ import { cn } from "@/lib/utils";
 import { ErapRole, ROLE_LABELS, hasPermission } from "@/lib/erap-roles";
 import { getViewerName } from "@/lib/auth";
 import { AccountBadge } from "@/components/shell/AccountBadge";
+import { useAppRole } from "@/components/shell/AppShell";
 import { logAudit } from "@/lib/audit-log";
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -327,7 +328,7 @@ const NAV = [
 // ────────────────────────────────────────────────────────────────────────────
 
 export function AgentManagement() {
-  const [role, setRole] = useState<ErapRole>("Administrator");
+  const [role] = useAppRole();
   const [tab, setTab] = useState("dashboard");
   const [wizardOpen, setWizardOpen] = useState(false);
 
@@ -545,14 +546,7 @@ function TopBar({ role, setRole }: { role: ErapRole; setRole: (r: ErapRole) => v
         <Input placeholder="Search agents, policies, versions…" className="h-9 pl-9" />
       </div>
       <div className="ml-auto flex items-center gap-2">
-        <Select value={role} onValueChange={(v) => setRole(v as ErapRole)}>
-          <SelectTrigger className="h-9 w-[200px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {(Object.keys(ROLE_LABELS) as ErapRole[]).map((r) => (
-              <SelectItem key={r} value={r}>Role: {ROLE_LABELS[r]}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="hidden h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium text-muted-foreground sm:inline-flex" aria-label="Your role" title="Your assigned role"><span className="text-foreground">{ROLE_LABELS[role]}</span></div>
         <Button variant="ghost" size="icon" aria-label="Notifications">
           <Bell className="h-4 w-4" />
         </Button>

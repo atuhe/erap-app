@@ -65,6 +65,7 @@ import {
 import { logAudit } from "@/lib/audit-log";
 import { getViewerName } from "@/lib/auth";
 import { AccountBadge } from "@/components/shell/AccountBadge";
+import { useAppRole } from "@/components/shell/AppShell";
 import { useBackendUsers, type AppUser } from "@/features/users/useBackendUsers";
 import { AuditLogView } from "@/components/audit/AuditLogView";
 
@@ -93,7 +94,7 @@ const NAV_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
 };
 
 export function UsersModule() {
-  const [role, setRole] = useState<ErapRole>("Administrator");
+  const [role] = useAppRole();
   const [tab, setTab] = useState("dashboard");
   const canManageUsers = hasPermission(role, "manage_users");
   const canManageRoles = hasPermission(role, "manage_roles");
@@ -155,16 +156,7 @@ export function UsersModule() {
               <p className="text-[11px] text-muted-foreground">Identity, access control and approval policies</p>
             </div>
             <div className="ml-auto flex items-center gap-2">
-              <Select value={role} onValueChange={(v) => setRole(v as ErapRole)}>
-                <SelectTrigger className="h-9 w-[220px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {(Object.keys(ROLE_LABELS) as ErapRole[]).map((r) => (
-                    <SelectItem key={r} value={r}>Role: {ROLE_LABELS[r]}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="hidden h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium text-muted-foreground sm:inline-flex" aria-label="Your role" title="Your assigned role"><span className="text-foreground">{ROLE_LABELS[role]}</span></div>
               <Button variant="ghost" size="icon" aria-label="Notifications">
                 <Bell className="h-4 w-4" />
               </Button>
