@@ -225,78 +225,19 @@ export function DeviceManagement() {
   return (
    <TooltipProvider delayDuration={200}>
     <>
-    <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
-      {/* Sidebar */}
-      <aside className="hidden w-60 flex-col bg-sidebar text-sidebar-foreground md:flex">
-        <div className="flex h-14 items-center gap-2 border-b border-sidebar-border px-4">
-          <div className="grid h-8 w-8 place-items-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground">
-            <Plug className="h-4 w-4" />
-          </div>
-          <div className="leading-tight">
-            <div className="text-sm font-semibold">RemoteAdmin</div>
-            <div className="text-[11px] text-sidebar-foreground/60">Enterprise Console</div>
-          </div>
+    <div className="flex h-full min-h-0 flex-col">
+      {/* Search (moved out of the old top bar; the shared AppShell now provides the chrome) */}
+      <div className="border-b bg-card px-4 py-3">
+        <div className="relative max-w-xl">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search Device ID, Hostname, or Current User…"
+            className="h-9 pl-9"
+          />
         </div>
-        <nav className="flex-1 space-y-1 p-2">
-          {NAV.map((n) => {
-            const Icon = n.icon;
-            const isActive = active === n.key;
-            const disabled = !!n.perm && !hasPermission(role, n.perm);
-            const btn = (
-              <button
-                key={n.key}
-                onClick={() => onNavClick(n)}
-                className={cn(
-                  "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
-                  isActive
-                    ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : disabled
-                      ? "cursor-not-allowed text-sidebar-foreground/40"
-                      : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {n.label}
-              </button>
-            );
-            return disabled ? (
-              <Tooltip key={n.key}>
-                <TooltipTrigger asChild><span>{btn}</span></TooltipTrigger>
-                <TooltipContent side="right">Requires {n.perm} permission</TooltipContent>
-              </Tooltip>
-            ) : btn;
-          })}
-        </nav>
-        <div className="border-t border-sidebar-border p-3 text-xs text-sidebar-foreground/60">
-          v2.4.1 · Build 20260717
-        </div>
-      </aside>
-
-      {/* Main */}
-      <div className="flex min-w-0 flex-1 flex-col">
-        {/* Top bar */}
-        <header className="flex h-14 items-center gap-3 border-b bg-card px-4">
-          <div className="min-w-0">
-            <h1 className="truncate text-sm font-semibold">Devices</h1>
-            <p className="text-[11px] text-muted-foreground">All managed Windows endpoints</p>
-          </div>
-          <div className="relative ml-4 hidden max-w-md flex-1 md:block">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search Device ID, Hostname, or Current User…"
-              className="h-9 pl-9"
-            />
-          </div>
-          <div className="ml-auto flex items-center gap-2">
-            <div className="hidden h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium text-muted-foreground sm:inline-flex" aria-label="Your role" title="Your assigned role"><span className="text-foreground">{ROLE_LABELS[role]}</span></div>
-            <Button variant="ghost" size="icon" aria-label="Notifications">
-              <Bell className="h-4 w-4" />
-            </Button>
-            <AccountBadge />
-          </div>
-        </header>
+      </div>
 
         {/* Filters + Content */}
         <div className="flex min-h-0 flex-1">
@@ -480,7 +421,6 @@ export function DeviceManagement() {
             </aside>
           )}
         </div>
-      </div>
     </div>
     <ConnectDialog
       open={!!connectDevice}

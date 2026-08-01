@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { DeviceManagement } from "@/components/device-management/DeviceManagement";
 import { requirePermission } from "@/lib/route-guards";
+import { AppShell } from "@/components/shell/AppShell";
 
 export const Route = createFileRoute("/")({
   beforeLoad: () => requirePermission("devices.view"),
@@ -16,5 +17,9 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
-  return <DeviceManagement />;
+  return (
+    <AppShell>
+      <DeviceManagement />
+    </AppShell>
+  );
 }
