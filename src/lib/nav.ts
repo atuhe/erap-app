@@ -60,6 +60,13 @@ export const APP_NAV: NavGroup[] = [
       { key: "security", label: "Audit & Compliance", to: "/security", icon: ShieldCheck, perm: "view_audit" },
     ],
   },
+  {
+    key: "insights",
+    label: "Insights",
+    items: [
+      { key: "reports", label: "Reports", to: "/reports", icon: FileBarChart, perm: "view_reports" },
+    ],
+  },
 ];
 
 export const ROUTE_META: Record<string, { title: string; breadcrumbs: { label: string; to?: string }[] }> = {
@@ -86,6 +93,10 @@ export const ROUTE_META: Record<string, { title: string; breadcrumbs: { label: s
   "/security": {
     title: "Security Center",
     breadcrumbs: [{ label: "Security" }, { label: "Audit & Compliance" }],
+  },
+  "/reports": {
+    title: "Reports",
+    breadcrumbs: [{ label: "Insights" }, { label: "Reports" }],
   },
 };
 

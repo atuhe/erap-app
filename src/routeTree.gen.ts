@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as UsersRouteImport } from './routes/users'
 import { Route as SessionsRouteImport } from './routes/sessions'
 import { Route as SecurityRouteImport } from './routes/security'
+import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ConsoleRouteImport } from './routes/console'
 import { Route as AgentsRouteImport } from './routes/agents'
@@ -30,6 +31,11 @@ const SessionsRoute = SessionsRouteImport.update({
 const SecurityRoute = SecurityRouteImport.update({
   id: '/security',
   path: '/security',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReportsRoute = ReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -58,6 +64,7 @@ export interface FileRoutesByFullPath {
   '/agents': typeof AgentsRoute
   '/console': typeof ConsoleRoute
   '/login': typeof LoginRoute
+  '/reports': typeof ReportsRoute
   '/security': typeof SecurityRoute
   '/sessions': typeof SessionsRoute
   '/users': typeof UsersRoute
@@ -67,6 +74,7 @@ export interface FileRoutesByTo {
   '/agents': typeof AgentsRoute
   '/console': typeof ConsoleRoute
   '/login': typeof LoginRoute
+  '/reports': typeof ReportsRoute
   '/security': typeof SecurityRoute
   '/sessions': typeof SessionsRoute
   '/users': typeof UsersRoute
@@ -77,6 +85,7 @@ export interface FileRoutesById {
   '/agents': typeof AgentsRoute
   '/console': typeof ConsoleRoute
   '/login': typeof LoginRoute
+  '/reports': typeof ReportsRoute
   '/security': typeof SecurityRoute
   '/sessions': typeof SessionsRoute
   '/users': typeof UsersRoute
@@ -88,6 +97,7 @@ export interface FileRouteTypes {
     | '/agents'
     | '/console'
     | '/login'
+    | '/reports'
     | '/security'
     | '/sessions'
     | '/users'
@@ -97,6 +107,7 @@ export interface FileRouteTypes {
     | '/agents'
     | '/console'
     | '/login'
+    | '/reports'
     | '/security'
     | '/sessions'
     | '/users'
@@ -106,6 +117,7 @@ export interface FileRouteTypes {
     | '/agents'
     | '/console'
     | '/login'
+    | '/reports'
     | '/security'
     | '/sessions'
     | '/users'
@@ -116,6 +128,7 @@ export interface RootRouteChildren {
   AgentsRoute: typeof AgentsRoute
   ConsoleRoute: typeof ConsoleRoute
   LoginRoute: typeof LoginRoute
+  ReportsRoute: typeof ReportsRoute
   SecurityRoute: typeof SecurityRoute
   SessionsRoute: typeof SessionsRoute
   UsersRoute: typeof UsersRoute
@@ -142,6 +155,13 @@ declare module '@tanstack/react-router' {
       path: '/security'
       fullPath: '/security'
       preLoaderRoute: typeof SecurityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reports': {
+      id: '/reports'
+      path: '/reports'
+      fullPath: '/reports'
+      preLoaderRoute: typeof ReportsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -180,6 +200,7 @@ const rootRouteChildren: RootRouteChildren = {
   AgentsRoute: AgentsRoute,
   ConsoleRoute: ConsoleRoute,
   LoginRoute: LoginRoute,
+  ReportsRoute: ReportsRoute,
   SecurityRoute: SecurityRoute,
   SessionsRoute: SessionsRoute,
   UsersRoute: UsersRoute,

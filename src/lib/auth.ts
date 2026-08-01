@@ -108,25 +108,6 @@ function toErapRole(roles: string[] | undefined): ErapRole {
 }
 
 export async function login(username: string, password: string): Promise<Profile> {
-  // Demo shortcut — resolves before hitting the network.
-  if (username.trim().toLowerCase() === DEMO_USERNAME && password === DEMO_PASSWORD) {
-    setToken(DEMO_TOKEN);
-    sessionStorage.setItem(PROFILE_KEY, JSON.stringify(DEMO_PROFILE));
-    setCachedProfile(DEMO_PROFILE);
-    broadcast("login");
-    resetSessionTimeout();
-    logAudit({
-      actor: DEMO_PROFILE.fullName,
-      actorRole: toErapRole(DEMO_PROFILE.roles),
-      category: "auth",
-      action: "login",
-      target: DEMO_PROFILE.username,
-      status: "success",
-      details: "Signed in",
-    });
-    return DEMO_PROFILE;
-  }
-
   let result: LoginResponse;
   try {
     result = await apiFetch<LoginResponse>("/api/auth/login", {

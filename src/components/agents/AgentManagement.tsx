@@ -341,7 +341,7 @@ export function AgentManagement() {
         <AgentSidebar />
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <TopBar role={role} setRole={setRole} />
+          <TopBar role={role} />
 
           <div className="flex min-h-0 flex-1 flex-col">
             {/* Page header */}
@@ -534,7 +534,7 @@ function AgentSidebar() {
   );
 }
 
-function TopBar({ role, setRole }: { role: ErapRole; setRole: (r: ErapRole) => void }) {
+function TopBar({ role }: { role: ErapRole }) {
   return (
     <header className="flex h-14 items-center gap-3 border-b bg-card px-4">
       <div className="min-w-0">

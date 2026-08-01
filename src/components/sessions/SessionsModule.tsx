@@ -21,6 +21,7 @@ import { Link } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { ErapRole, ROLE_LABELS, hasPermission } from "@/lib/erap-roles";
+import { useAppRole } from "@/components/shell/AppShell";
 import { logAudit } from "@/lib/audit-log";
 import {
   SESSION_STATUS_META, formatDuration, formatTime,
