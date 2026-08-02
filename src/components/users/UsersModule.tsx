@@ -418,6 +418,8 @@ function RoleBadge({ role }: { role: ErapRole }) {
     "Supervisor": "bg-blue-500/10 text-blue-700 dark:text-blue-400",
     "Support Officer": "bg-slate-500/10 text-slate-700 dark:text-slate-300",
     "Viewer": "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+    "Maintenance Technician": "bg-orange-500/10 text-orange-700 dark:text-orange-400",
+    "Network Technician": "bg-teal-500/10 text-teal-700 dark:text-teal-400",
   };
   return <Badge variant="outline" className={cn("border-transparent font-medium", tones[role])}>{ROLE_LABELS[role]}</Badge>;
 }

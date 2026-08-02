@@ -1,13 +1,21 @@
 // The real roles, matching the backend ROLES table and the JWT.
-export type ErapRole = "Administrator" | "Support Officer" | "Supervisor" | "Viewer";
+export type ErapRole =
+  | "Administrator"
+  | "Support Officer"
+  | "Supervisor"
+  | "Viewer"
+  | "Maintenance Technician"
+  | "Network Technician";
 
-export const ALL_ROLES: ErapRole[] = ["Administrator", "Support Officer", "Supervisor", "Viewer"];
+export const ALL_ROLES: ErapRole[] = ["Administrator", "Support Officer", "Supervisor", "Viewer", "Maintenance Technician", "Network Technician"];
 
 export const ROLE_LABELS: Record<ErapRole, string> = {
   "Administrator": "Administrator",
   "Support Officer": "Support Officer",
   "Supervisor": "Supervisor",
   "Viewer": "Viewer",
+  "Maintenance Technician": "Maintenance Technician",
+  "Network Technician": "Network Technician",
 };
 
 export const ROLE_DESCRIPTIONS: Record<ErapRole, string> = {
@@ -15,6 +23,8 @@ export const ROLE_DESCRIPTIONS: Record<ErapRole, string> = {
   "Support Officer": "Initiates and runs remote sessions on managed devices.",
   "Supervisor": "Oversees sessions, approves access, and reviews the audit trail.",
   "Viewer": "Read-only access to inventory, session history, and logs.",
+  "Maintenance Technician": "Performs repairs and hardware maintenance on MIS kits.",
+  "Network Technician": "Performs network configuration and connectivity support.",
 };
 
 // UI-side permission concepts used for badges/toggles in the console.
@@ -45,6 +55,8 @@ export const ROLE_PERMISSIONS: Record<ErapRole, Permission[]> = {
     "remote_desktop","file_transfer","clipboard","chat","restart","view_devices",
   ],
   "Viewer": ["view_devices","view_reports","view_audit","export_reports"],
+  "Maintenance Technician": ["remote_desktop","file_transfer","clipboard","chat","restart","view_devices"],
+  "Network Technician": ["remote_desktop","file_transfer","clipboard","chat","restart","view_devices"],
 };
 
 export interface NavItem { key: string; label: string; to?: string; }
@@ -78,6 +90,18 @@ export const ROLE_NAV: Record<ErapRole, NavItem[]> = {
     { key: "audit", label: "Audit Logs" },
     { key: "reports", label: "Reports" },
     { key: "sessions", label: "Sessions" },
+    { key: "settings", label: "Settings" },
+  ],
+  "Maintenance Technician": [
+    { key: "devices", label: "MIS Kits", to: "/" },
+    { key: "sessions", label: "Sessions" },
+    { key: "history", label: "My Session History" },
+    { key: "settings", label: "Settings" },
+  ],
+  "Network Technician": [
+    { key: "devices", label: "MIS Kits", to: "/" },
+    { key: "sessions", label: "Sessions" },
+    { key: "history", label: "My Session History" },
     { key: "settings", label: "Settings" },
   ],
 };
