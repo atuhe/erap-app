@@ -20,3 +20,23 @@ export function disableDevice(id: number): Promise<{ message: string }> {
 export function enableDevice(id: number): Promise<{ message: string }> {
   return apiFetch(`/api/devices/${id}/enable`, { method: "POST" });
 }
+
+export interface RegisterDeviceRequest {
+  hostname: string;
+  currentUsername?: string | null;
+  branch?: string | null;
+  department?: string | null;
+  ipAddress?: string | null;
+  rustDeskId?: string | null;
+  rustDeskPort?: number | null;
+  osVersion?: string | null;
+  agentVersion?: string | null;
+}
+
+// Create/update a device (upserts on hostname). Used by the Add Device form.
+export function registerDevice(req: RegisterDeviceRequest): Promise<Device> {
+  return apiFetch<Device>("/api/devices/register", {
+    method: "POST",
+    body: JSON.stringify(req),
+  });
+}

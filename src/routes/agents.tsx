@@ -1,16 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { AgentManagement } from "@/components/agents/AgentManagement";
+import { AppShell } from "@/components/shell/AppShell";
+import { ComingSoon } from "@/components/shared/ComingSoon";
 import { requirePermission } from "@/lib/route-guards";
 
 export const Route = createFileRoute("/agents")({
   beforeLoad: () => requirePermission("devices.manage"),
-  head: () => ({
-    meta: [
-      { title: "Agent Management — Remote Admin Console" },
-      { name: "description", content: "Deploy, monitor, update and govern the ERAP agent installed on Windows endpoints across the private enterprise WAN." },
-      { property: "og:title", content: "Agent Management — Remote Admin Console" },
-      { property: "og:description", content: "Deploy, monitor, update and govern the ERAP agent installed on Windows endpoints across the private enterprise WAN." },
-    ],
-  }),
-  component: () => <AgentManagement />,
+  head: () => ({ meta: [{ title: "Agent Management — ERAP" }] }),
+  component: () => (
+    <AppShell>
+      <ComingSoon
+        title="Agent Management"
+        description="Deploy, monitor, and update the ERAP agent across Windows endpoints."
+        needs="This activates when the ERAP agent is built and deployed. The agent will auto-register devices, report heartbeats, and keep RustDesk IDs current."
+      />
+    </AppShell>
+  ),
 });

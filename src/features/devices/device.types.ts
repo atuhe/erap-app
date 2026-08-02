@@ -9,6 +9,7 @@ export interface Device {
   branch: string | null;
   department: string | null;
   ipAddress: string | null;
+  rustDeskId: string | null;
   rustDeskPort: number;
   osVersion: string | null;
   agentVersion: string | null;
