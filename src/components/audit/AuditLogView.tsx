@@ -51,6 +51,39 @@ export function AuditLogView({ canExport = false }: { canExport?: boolean }) {
     });
   }, [entries, q, cat, status, action, from, to]);
 
+  function exportCsv() {
+    if (filtered.length === 0) {
+      toast.error("No rows to export");
+      return;
+    }
+    const cols = ["Timestamp", "Actor", "Action", "Category", "Target", "Target ID", "Result", "Details"];
+    const esc = (v: unknown) => {
+      const str = v == null ? "" : String(v);
+      return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+    };
+    const rows = filtered.map((e) => [
+      new Date(e.ts).toISOString(),
+      e.actor,
+      e.action,
+      e.category,
+      e.target ?? "",
+      e.targetId ?? "",
+      e.status,
+      e.details ?? "",
+    ].map(esc).join(","));
+    const csv = [cols.join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `erap-audit-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${filtered.length} audit rows`);
+  }
+
   return (
     <div className="space-y-4">
       <Card>
@@ -94,7 +127,7 @@ export function AuditLogView({ canExport = false }: { canExport?: boolean }) {
               size="sm"
               className="ml-auto"
               disabled={!canExport}
-              onClick={() => toast.success(`Exported ${filtered.length} audit rows`)}
+              onClick={exportCsv}
             >
               <Download className="mr-2 h-4 w-4" /> Export CSV
             </Button>
