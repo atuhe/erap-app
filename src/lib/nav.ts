@@ -57,7 +57,7 @@ export const APP_NAV: NavGroup[] = [
     key: "security",
     label: "Security Center",
     items: [
-      { key: "security", label: "Audit & Compliance", to: "/security", icon: ShieldCheck, perm: "view_audit" },
+      { key: "audit", label: "Audit & Compliance", to: "/audit", icon: ShieldCheck, perm: "view_audit" },
     ],
   },
   {
@@ -97,6 +97,10 @@ export const ROUTE_META: Record<string, { title: string; breadcrumbs: { label: s
   "/reports": {
     title: "Reports",
     breadcrumbs: [{ label: "Insights" }, { label: "Reports" }],
+  },
+  "/audit": {
+    title: "Audit & Compliance",
+    breadcrumbs: [{ label: "Security" }, { label: "Audit & Compliance" }],
   },
 };
 

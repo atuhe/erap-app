@@ -164,6 +164,8 @@ export function logout(): void {
       details: "Signed out",
     });
   }
+  // Record the sign-out on the server while the token is still valid.
+  apiFetch("/api/auth/logout", { method: "POST" }).catch(() => {});
   stopSessionTimeout();
   clearToken();
   setCachedProfile(null);

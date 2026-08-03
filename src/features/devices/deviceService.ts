@@ -28,3 +28,23 @@ export function setKitStatus(id: number, status: string, reason?: string) {
     body: JSON.stringify({ status, reason: reason ?? null }),
   });
 }
+
+export interface RegisterDeviceRequest {
+  hostname: string;
+  currentUsername?: string | null;
+  branch?: string | null;
+  department?: string | null;
+  ipAddress?: string | null;
+  rustDeskId?: string | null;
+  rustDeskPort?: number | null;
+  osVersion?: string | null;
+  agentVersion?: string | null;
+}
+
+// Create/update a kit (upserts on hostname). Used by the Add Kit form.
+export function registerDevice(req: RegisterDeviceRequest): Promise<Device> {
+  return apiFetch<Device>("/api/devices/register", {
+    method: "POST",
+    body: JSON.stringify(req),
+  });
+}

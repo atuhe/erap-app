@@ -17,6 +17,7 @@ import {
   Bell,
   ChevronDown,
   Circle,
+  Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,6 +50,7 @@ import { logAudit } from "@/lib/audit-log";
 import { useNavigate } from "@tanstack/react-router";
 import { type ConnectTarget } from "@/components/sessions/SessionWorkflow";
 import { ConnectDialog } from "@/features/sessions/ConnectDialog";
+import { AddDeviceDialog } from "@/features/devices/AddDeviceDialog";
 
 type Status = "online" | "offline";
 
@@ -111,6 +113,7 @@ export function DeviceManagement() {
   const [os, setOs] = useState("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [connectDevice, setConnectDevice] = useState<ConnectTarget | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
   const navigate = useNavigate();
 
   // --- Real device inventory, loaded from the ERAP API on mount ---
@@ -235,16 +238,19 @@ export function DeviceManagement() {
     <>
     <div className="flex h-full min-h-0 flex-col">
       {/* Search (moved out of the old top bar; the shared AppShell now provides the chrome) */}
-      <div className="border-b bg-card px-4 py-3">
-        <div className="relative max-w-xl">
+      <div className="flex items-center gap-2 border-b bg-card px-4 py-3">
+        <div className="relative max-w-xl flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search Device ID, Hostname, or Current User…"
+            placeholder="Search Kit ID, Hostname, or Current User…"
             className="h-9 pl-9"
           />
         </div>
+        <Button className="ml-auto shrink-0" onClick={() => setAddOpen(true)}>
+          <Plus className="mr-1 h-4 w-4" /> Add kit
+        </Button>
       </div>
 
         {/* Filters + Content */}
@@ -430,6 +436,7 @@ export function DeviceManagement() {
           )}
         </div>
     </div>
+    <AddDeviceDialog open={addOpen} onOpenChange={setAddOpen} onAdded={() => void loadDevices()} />
     <ConnectDialog
       open={!!connectDevice}
       onOpenChange={(v) => !v && setConnectDevice(null)}
