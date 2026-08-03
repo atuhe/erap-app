@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus } from "lucide-react";
 import { getDevices } from "@/features/devices/deviceService";
 import type { Device as ApiDevice } from "@/features/devices/device.types";
 import {
@@ -50,15 +49,18 @@ import { logAudit } from "@/lib/audit-log";
 import { useNavigate } from "@tanstack/react-router";
 import { type ConnectTarget } from "@/components/sessions/SessionWorkflow";
 import { ConnectDialog } from "@/features/sessions/ConnectDialog";
-import { AddDeviceDialog } from "@/features/devices/AddDeviceDialog";
 
 type Status = "online" | "offline";
 
 interface Device {
   id: string;
+  deviceIdNum: number;
   hostname: string;
   currentUser: string;
   branch: string;
+  unit: string;
+  rawStatus: string;
+  statusReason: string;
   department: string;
   status: Status;
   lastSeen: string;
@@ -73,9 +75,13 @@ interface Device {
 function toUiDevice(d: ApiDevice): Device {
   return {
     id: `DEV-${d.deviceId}`,
+    deviceIdNum: d.deviceId,
     hostname: d.hostname,
     currentUser: d.currentUsername ?? "—",
     branch: d.branch ?? "—",
+    unit: d.unit ?? d.branch ?? "—",
+    rawStatus: d.status,
+    statusReason: d.statusReason ?? "",
     department: d.department ?? "—",
     // The UI only knows online/offline, so fold the backend's four states down.
     status: d.status === "Online" || d.status === "In Session" ? "online" : "offline",
@@ -105,7 +111,6 @@ export function DeviceManagement() {
   const [os, setOs] = useState("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [connectDevice, setConnectDevice] = useState<ConnectTarget | null>(null);
-  const [addOpen, setAddOpen] = useState(false);
   const navigate = useNavigate();
 
   // --- Real device inventory, loaded from the ERAP API on mount ---
@@ -230,8 +235,8 @@ export function DeviceManagement() {
     <>
     <div className="flex h-full min-h-0 flex-col">
       {/* Search (moved out of the old top bar; the shared AppShell now provides the chrome) */}
-      <div className="flex items-center gap-2 border-b bg-card px-4 py-3">
-        <div className="relative max-w-xl flex-1">
+      <div className="border-b bg-card px-4 py-3">
+        <div className="relative max-w-xl">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={q}
@@ -240,11 +245,6 @@ export function DeviceManagement() {
             className="h-9 pl-9"
           />
         </div>
-        {hasPermission(role, "manage_users") || hasPermission(role, "view_devices") ? (
-          <Button className="ml-auto shrink-0" onClick={() => setAddOpen(true)}>
-            <Plus className="mr-1 h-4 w-4" /> Add device
-          </Button>
-        ) : null}
       </div>
 
         {/* Filters + Content */}
@@ -275,7 +275,7 @@ export function DeviceManagement() {
                         <TableHead className="w-[120px]">Device ID</TableHead>
                         <TableHead>Hostname</TableHead>
                         <TableHead>Current User</TableHead>
-                        <TableHead>Branch</TableHead>
+                        <TableHead>Unit</TableHead>
                         <TableHead>Department</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Last Seen</TableHead>
@@ -293,7 +293,7 @@ export function DeviceManagement() {
                           <TableCell className="font-mono text-xs">{d.id}</TableCell>
                           <TableCell className="font-medium">{d.hostname}</TableCell>
                           <TableCell className="text-muted-foreground">{d.currentUser}</TableCell>
-                          <TableCell>{d.branch}</TableCell>
+                          <TableCell>{d.unit}</TableCell>
                           <TableCell>{d.department}</TableCell>
                           <TableCell>
                             <StatusPill status={d.status} />
@@ -436,7 +436,6 @@ export function DeviceManagement() {
       device={connectDevice}
       onConnected={() => void loadDevices()}
     />
-    <AddDeviceDialog open={addOpen} onOpenChange={setAddOpen} onAdded={() => void loadDevices()} />
     </>
    </TooltipProvider>
     );

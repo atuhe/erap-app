@@ -1,15 +1,16 @@
 // Shape mirrors ERAP.Application.DTOs.DeviceDto on the backend.
 // JSON is camelCase because ASP.NET serialises that way by default.
-export type DeviceStatus = "Online" | "Offline" | "In Session" | "Disabled";
+export type DeviceStatus = "Online" | "Offline" | "In Session" | "Disabled" | "Obsolete" | "Disposed";
 
 export interface Device {
   deviceId: number;
   hostname: string;
   currentUsername: string | null;
   branch: string | null;
+  unit: string | null;
+  statusReason: string | null;
   department: string | null;
   ipAddress: string | null;
-  rustDeskId: string | null;
   rustDeskPort: number;
   osVersion: string | null;
   agentVersion: string | null;
